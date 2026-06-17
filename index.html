@@ -7,13 +7,23 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }
     .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
-    .time-row { display: flex; gap: 15px; }
-    .time-row .form-group { flex: 1; }
+    .time-row { display: flex; gap: 15px; margin-bottom: 5px; }
+    .time-row .form-group { flex: 1; margin-bottom: 0; }
     label { font-weight: bold; margin-bottom: 5px; }
     select, textarea, button { padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
     textarea { height: 100px; resize: vertical; }
     button { background: #0070f3; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; }
     button:disabled { background: #ccc; cursor: not-allowed; }
+    
+    /* Duration Display Styling */
+    .duration-display { 
+      font-size: 14px; 
+      margin-bottom: 15px; 
+      font-weight: 500;
+      color: #555;
+    }
+    .error-text { color: #d32f2f; }
+    .success-text { color: #2e7d32; }
   </style>
 </head>
 <body>
@@ -39,6 +49,8 @@
       </div>
     </div>
 
+    <div id="durationDisplay" class="duration-display"></div>
+
     <div class="form-group">
       <label for="taskDetails">What did you accomplish?</label>
       <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
@@ -48,19 +60,62 @@
   </form>
 
   <script>
-    // Paste your Google Web App URL here
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
 
-    // Helper function to build 15-minute increments
+    // Helper to turn a string like "08:15 AM" into actual minutes from midnight
+    function timeToMinutes(timeStr) {
+      const [time, modifier] = timeStr.split(' ');
+      let [hours, minutes] = time.split(':').map(Number);
+      
+      if (hours === 12) {
+        hours = (modifier === 'AM') ? 0 : 12;
+      } else if (modifier === 'PM') {
+        hours += 12;
+      }
+      return (hours * 60) + minutes;
+    }
+
+    // Live calculation logic
+    function calculateDuration() {
+      const startVal = document.getElementById('startTime').value;
+      const endVal = document.getElementById('endTime').value;
+      const display = document.getElementById('durationDisplay');
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (!startVal || !endVal) return;
+
+      const startMinutes = timeToMinutes(startVal);
+      const endMinutes = timeToMinutes(endVal);
+      const diff = endMinutes - startMinutes;
+
+      if (diff <= 0) {
+        display.innerHTML = "<span class='error-text'>⚠️ End time must be after start time.</span>";
+        submitBtn.disabled = true;
+      } else {
+        const hours = Math.floor(diff / 60);
+        const minutes = diff % 60;
+        
+        let durationText = "⏱️ Total Time: ";
+        if (hours > 0) durationText += `${hours} hr${hours > 1 ? 's' : ''} `;
+        if (minutes > 0) durationText += `${minutes} mins`;
+        
+        display.innerHTML = `<span class='success-text'>${durationText}</span>`;
+        // Only enable if the roster list is fully loaded
+        if (document.getElementById('name').value !== "") {
+          submitBtn.disabled = false;
+        }
+      }
+    }
+
+    // Build 15-minute increments
     function generateTimeOptions() {
       const startSelect = document.getElementById('startTime');
       const endSelect = document.getElementById('endTime');
       
       let current = new Date();
-      current.setHours(8, 15, 0, 0); // Start at 8:15 AM
-      
+      current.setHours(8, 15, 0, 0); 
       const endLimit = new Date();
-      endLimit.setHours(17, 30, 0, 0); // End at 5:30 PM
+      endLimit.setHours(17, 30, 0, 0); 
 
       while (current <= endLimit) {
         let timeString = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -75,13 +130,14 @@
         optEnd.textContent = timeString;
         endSelect.appendChild(optEnd);
 
-        current.setMinutes(current.getMinutes() + 15); // Bump by 15 mins
+        current.setMinutes(current.getMinutes() + 15); 
       }
-      // Offset default selection for convenience (e.g., end time defaults to 9:00 AM if start is 8:15)
-      if(endSelect.options.length > 3) endSelect.selectedIndex = 3; 
+      
+      // Offset default to avoid 0-minute duration out of the box
+      if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    // Fetch roster data from Google Sheet "Leads" tab on page load
+    // Fetch roster from Sheets
     async function loadTeamRoster() {
       const nameSelect = document.getElementById('name');
       const submitBtn = document.getElementById('submitBtn');
@@ -99,22 +155,25 @@
             opt.textContent = name;
             nameSelect.appendChild(opt);
           });
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Submit Entry";
+          // Run calculation to initialize the duration display text
+          calculateDuration();
         } else {
           nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
         }
       } catch (error) {
-        console.error("Failed to fetch roster:", error);
-        nameSelect.innerHTML = '<option value="">Error loading names. Refresh page.</option>';
+        nameSelect.innerHTML = '<option value="">Error loading names.</option>';
       }
     }
 
-    // Initialize Form Variables
+    // Initialize Form and attach event listeners to watch dropdown changes
     generateTimeOptions();
     loadTeamRoster();
 
-    // Form submission code
+    document.getElementById('startTime').addEventListener('change', calculateDuration);
+    document.getElementById('endTime').addEventListener('change', calculateDuration);
+    document.getElementById('name').addEventListener('change', calculateDuration);
+
+    // Submission Handling
     document.getElementById('trackerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
