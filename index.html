@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Task Tracker</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }
+    .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
+    label { font-weight: bold; margin-bottom: 5px; }
+    select, textarea, button { padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+    textarea { height: 100px; resize: vertical; }
+    button { background: #0070f3; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 10px; }
+    button:hover { background: #0051a8; }
+  </style>
+</head>
+<body>
+
+  <h2>Team Task Tracker</h2>
+  <form id="trackerForm">
+    <!-- 4 People Dropdown -->
+    <div class="form-group">
+      <label for="name">Who are you?</label>
+      <select id="name" required>
+        <option value="">-- Select Your Name --</option>
+        <option value="Person 1">Person 1</option>
+        <option value="Person 2">Person 2</option>
+        <option value="Person 3">Person 3</option>
+        <option value="Person 4">Person 4</option>
+      </select>
+    </div>
+
+    <!-- Time Blocks (8:15 AM to 5:30 PM) -->
+    <div class="form-group">
+      <label for="timeSlot">Time Section:</label>
+      <select id="timeSlot" required>
+        <option value="">-- Select Time Slot --</option>
+        <option value="08:15 AM - 09:30 AM">08:15 AM - 09:30 AM</option>
+        <option value="09:30 AM - 11:00 AM">09:30 AM - 11:00 AM</option>
+        <option value="11:00 AM - 12:30 PM">11:00 AM - 12:30 PM</option>
+        <option value="12:30 PM - 01:30 PM (Lunch)">12:30 PM - 01:30 PM (Lunch)</option>
+        <option value="01:30 PM - 03:00 PM">01:30 PM - 03:00 PM</option>
+        <option value="03:00 PM - 04:15 PM">03:00 PM - 04:15 PM</option>
+        <option value="04:15 PM - 05:30 PM">04:15 PM - 05:30 PM</option>
+      </select>
+    </div>
+
+    <!-- Task Details -->
+    <div class="form-group">
+      <label for="taskDetails">What did you accomplish?</label>
+      <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
+    </div>
+
+    <button type="submit" id="submitBtn">Submit Entry</button>
+  </form>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
+
+    document.getElementById('trackerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.textContent = "Saving...";
+      btn.disabled = true;
+
+      const payload = {
+        name: document.getElementById('name').value,
+        timeSlot: document.getElementById('timeSlot').value,
+        taskDetails: document.getElementById('taskDetails').value
+      };
+
+      try {
+        // Use keepalive to ensure submission finishes if they close the tab quickly
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors', // Required for Google Web Apps redirect handling
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        alert("Task logged successfully!");
+        document.getElementById('taskDetails').value = ""; // Clear text box
+      } catch (error) {
+        alert("Something went wrong. Please try again.");
+        console.error(error);
+      } finally {
+        btn.textContent = "Submit Entry";
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
