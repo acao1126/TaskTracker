@@ -19,7 +19,7 @@
       --error-color: #d32f2f;
     }
 
-    /* 2. Dark Mode Variables (Applies automatically if device is in dark mode) */
+    /* 2. Dark Mode Variables (Applies automatically based on OS/Device settings) */
     @media (prefers-color-scheme: dark) {
       :root {
         --bg-color: #121212;
@@ -35,7 +35,7 @@
       }
     }
 
-    /* 3. Layout Styles (Using the variables above) */
+    /* 3. Layout Styles */
     body { 
       font-family: system-ui, sans-serif; 
       max-width: 500px; 
@@ -43,14 +43,14 @@
       padding: 20px; 
       background-color: var(--bg-color);
       color: var(--text-color);
-      transition: background-color 0.3s, color 0.3s; /* Smooth theme transitions */
+      transition: background-color 0.3s, color 0.3s;
     }
     
     form {
       background: var(--card-bg);
       padding: 25px;
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
     .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
@@ -129,8 +129,10 @@
   </form>
 
   <script>
+    // Your live Google Web App API link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
 
+    // Helper to turn strings like "08:15 AM" into minutes from midnight
     function timeToMinutes(timeStr) {
       const [time, modifier] = timeStr.split(' ');
       let [hours, minutes] = time.split(':').map(Number);
@@ -143,6 +145,7 @@
       return (hours * 60) + minutes;
     }
 
+    // Live duration calculator and logic validator
     function calculateDuration() {
       const startVal = document.getElementById('startTime').value;
       const endVal = document.getElementById('endTime').value;
@@ -167,12 +170,17 @@
         if (minutes > 0) durationText += `${minutes} mins`;
         
         display.innerHTML = `<span class='success-text'>${durationText}</span>`;
+        
+        // Only enable submission if a valid name is actively chosen
         if (document.getElementById('name').value !== "") {
           submitBtn.disabled = false;
+        } else {
+          submitBtn.disabled = true;
         }
       }
     }
 
+    // Programmatically generates choices from 8:15 AM to 5:30 PM
     function generateTimeOptions() {
       const startSelect = document.getElementById('startTime');
       const endSelect = document.getElementById('endTime');
@@ -198,42 +206,54 @@
         current.setMinutes(current.getMinutes() + 15); 
       }
       
+      // Separate the default index selections so they don't open matching
       if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    async function loadTeamRoster() {
+    // JSONP CALLBACK: Safely catches the data packed by Google without CORS blocks
+    function handleGoogleResponse(data) {
       const nameSelect = document.getElementById('name');
       const submitBtn = document.getElementById('submitBtn');
       
-      try {
-        const response = await fetch(SCRIPT_URL);
-        const data = await response.json();
-        
-        nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
-        
-        if (data.names && data.names.length > 0) {
-          data.names.forEach(name => {
-            let opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            nameSelect.appendChild(opt);
-          });
-          calculateDuration();
-        } else {
-          nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
-        }
-      } catch (error) {
-        nameSelect.innerHTML = '<option value="">Error loading names.</option>';
+      nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
+      
+      if (data.names && data.names.length > 0) {
+        data.names.forEach(name => {
+          let opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          nameSelect.appendChild(opt);
+        });
+        calculateDuration(); // Fire validation immediately
+      } else {
+        nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
       }
     }
 
+    // JSONP INJECTION: Securely fetches names bypasses browser tracking barriers
+    function loadTeamRoster() {
+      const nameSelect = document.getElementById('name');
+      const scriptElement = document.createElement('script');
+      
+      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse`;
+      
+      scriptElement.onerror = function() {
+        nameSelect.innerHTML = '<option value="">Error loading names. Refresh page.</option>';
+      };
+      
+      document.body.appendChild(scriptElement);
+    }
+
+    // Initialize Form Build Rules
     generateTimeOptions();
     loadTeamRoster();
 
+    // Change listeners to capture runtime updates
     document.getElementById('startTime').addEventListener('change', calculateDuration);
     document.getElementById('endTime').addEventListener('change', calculateDuration);
     document.getElementById('name').addEventListener('change', calculateDuration);
 
+    // Form Task Submission Pipeline
     document.getElementById('trackerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
@@ -256,12 +276,13 @@
         });
 
         alert("Task logged successfully!");
-        document.getElementById('taskDetails').value = "";
+        document.getElementById('taskDetails').value = ""; // Empty out description
       } catch (error) {
         alert("Something went wrong. Please try again.");
       } finally {
         btn.textContent = "Submit Entry";
         btn.disabled = false;
+        calculateDuration(); // Re-verify parameters 
       }
     });
   </script>
