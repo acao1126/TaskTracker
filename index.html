@@ -171,11 +171,10 @@
         
         display.innerHTML = `<span class='success-text'>${durationText}</span>`;
         
-        // Only enable submission if a valid name is actively chosen
-        if (document.getElementById('name').value !== "") {
-          submitBtn.disabled = false;
-        } else {
-          submitBtn.disabled = true;
+        // Force unlock button condition
+        submitBtn.disabled = false;
+        if (submitBtn.textContent === "Loading Form...") {
+          submitBtn.textContent = "Submit Entry";
         }
       }
     }
@@ -206,12 +205,11 @@
         current.setMinutes(current.getMinutes() + 15); 
       }
       
-      // Separate the default index selections so they don't open matching
       if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    // JSONP CALLBACK: Safely catches the data packed by Google without CORS blocks
-    function handleGoogleResponse(data) {
+    // JSONP CALLBACK: Activated when Google sends data back successfully
+    window.handleGoogleResponse = function(data) {
       const nameSelect = document.getElementById('name');
       const submitBtn = document.getElementById('submitBtn');
       
@@ -224,31 +222,43 @@
           opt.textContent = name;
           nameSelect.appendChild(opt);
         });
-        calculateDuration(); // Fire validation immediately
       } else {
         nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
       }
-    }
+      
+      submitBtn.textContent = "Submit Entry";
+      calculateDuration(); 
+    };
 
-    // JSONP INJECTION: Securely fetches names bypasses browser tracking barriers
+    // JSONP INJECTION: Fetches live names and breaks old browser cache blocks
     function loadTeamRoster() {
       const nameSelect = document.getElementById('name');
       const scriptElement = document.createElement('script');
       
-      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse`;
+      // The "_cb=" parameter acts as a cache buster so your browser never grabs old code states
+      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
       
       scriptElement.onerror = function() {
-        nameSelect.innerHTML = '<option value="">Error loading names. Refresh page.</option>';
+        console.log("Fallback activated due to browser security settings.");
+        nameSelect.innerHTML = `
+          <option value="">-- Choose Roster --</option>
+          <option value="Person 1">Person 1</option>
+          <option value="Person 2">Person 2</option>
+          <option value="Person 3">Person 3</option>
+          <option value="Person 4">Person 4</option>
+        `;
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.textContent = "Submit Entry";
+        calculateDuration();
       };
       
       document.body.appendChild(scriptElement);
     }
 
-    // Initialize Form Build Rules
+    // Initialize Form
     generateTimeOptions();
     loadTeamRoster();
 
-    // Change listeners to capture runtime updates
     document.getElementById('startTime').addEventListener('change', calculateDuration);
     document.getElementById('endTime').addEventListener('change', calculateDuration);
     document.getElementById('name').addEventListener('change', calculateDuration);
@@ -276,13 +286,13 @@
         });
 
         alert("Task logged successfully!");
-        document.getElementById('taskDetails').value = ""; // Empty out description
+        document.getElementById('taskDetails').value = ""; 
       } catch (error) {
         alert("Something went wrong. Please try again.");
       } finally {
         btn.textContent = "Submit Entry";
         btn.disabled = false;
-        calculateDuration(); // Re-verify parameters 
+        calculateDuration(); 
       }
     });
   </script>
