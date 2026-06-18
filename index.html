@@ -59,16 +59,17 @@
     
     label { font-weight: bold; margin-bottom: 5px; }
     
-    select, textarea, button { 
+    select, input[type="date"], textarea, button { 
       padding: 10px; 
       font-size: 16px; 
       border-radius: 6px; 
       border: 1px solid var(--border-color); 
       background-color: var(--input-bg);
       color: var(--text-color);
+      font-family: inherit;
     }
     
-    select:focus, textarea:focus {
+    select:focus, input[type="date"]:focus, textarea:focus {
       outline: 2px solid var(--btn-bg);
     }
     
@@ -107,6 +108,11 @@
       </select>
     </div>
 
+    <div class="form-group">
+      <label for="taskDate">Date:</label>
+      <input type="date" id="taskDate" required>
+    </div>
+
     <div class="time-row">
       <div class="form-group">
         <label for="startTime">From:</label>
@@ -131,6 +137,15 @@
   <script>
     // Your live Google Web App API link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
+
+    // Helper to calculate and set today's date in local time (YYYY-MM-DD format)
+    function setDefaultDate() {
+      const dateInput = document.getElementById('taskDate');
+      const today = new Date();
+      const offset = today.getTimezoneOffset();
+      const localDate = new Date(today.getTime() - (offset * 60 * 1000));
+      dateInput.value = localDate.toISOString().split('T')[0];
+    }
 
     // Helper to turn strings like "08:15 AM" into minutes from midnight
     function timeToMinutes(timeStr) {
@@ -235,7 +250,6 @@
       const nameSelect = document.getElementById('name');
       const scriptElement = document.createElement('script');
       
-      // The "_cb=" parameter acts as a cache buster so your browser never grabs old code states
       scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
       
       scriptElement.onerror = function() {
@@ -255,7 +269,8 @@
       document.body.appendChild(scriptElement);
     }
 
-    // Initialize Form
+    // Initialize Form Rules
+    setDefaultDate();
     generateTimeOptions();
     loadTeamRoster();
 
@@ -272,6 +287,7 @@
 
       const payload = {
         name: document.getElementById('name').value,
+        date: document.getElementById('taskDate').value, // Included chosen date in the data package
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
         taskDetails: document.getElementById('taskDetails').value
