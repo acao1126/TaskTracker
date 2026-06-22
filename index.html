@@ -19,7 +19,7 @@
       --error-color: #d32f2f;
     }
 
-    /* 2. Dark Mode Variables (Applies automatically based on OS/Device settings) */
+    /* 2. Dark Mode Variables */
     @media (prefers-color-scheme: dark) {
       :root {
         --bg-color: #121212;
@@ -135,10 +135,10 @@
   </form>
 
   <script>
-    // Your live Google Web App API link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
+    const CACHE_KEY = "teamRosterData";
+    const CACHE_TIMEOUT = 60 * 60 * 1000; // Cache duration: 1 Hour (in milliseconds)
 
-    // Helper to calculate and set today's date in local time (YYYY-MM-DD format)
     function setDefaultDate() {
       const dateInput = document.getElementById('taskDate');
       const today = new Date();
@@ -147,7 +147,6 @@
       dateInput.value = localDate.toISOString().split('T')[0];
     }
 
-    // Helper to turn strings like "08:15 AM" into minutes from midnight
     function timeToMinutes(timeStr) {
       const [time, modifier] = timeStr.split(' ');
       let [hours, minutes] = time.split(':').map(Number);
@@ -160,7 +159,6 @@
       return (hours * 60) + minutes;
     }
 
-    // Live duration calculator and logic validator
     function calculateDuration() {
       const startVal = document.getElementById('startTime').value;
       const endVal = document.getElementById('endTime').value;
@@ -186,7 +184,6 @@
         
         display.innerHTML = `<span class='success-text'>${durationText}</span>`;
         
-        // Force unlock button condition
         submitBtn.disabled = false;
         if (submitBtn.textContent === "Loading Form...") {
           submitBtn.textContent = "Submit Entry";
@@ -194,7 +191,6 @@
       }
     }
 
-    // Programmatically generates choices from 8:15 AM to 5:30 PM
     function generateTimeOptions() {
       const startSelect = document.getElementById('startTime');
       const endSelect = document.getElementById('endTime');
@@ -223,47 +219,68 @@
       if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    // JSONP CALLBACK: Activated when Google sends data back successfully
-    window.handleGoogleResponse = function(data) {
+    // Helper to popular the UI dropdown from an array of names
+    function populateNameDropdown(names) {
       const nameSelect = document.getElementById('name');
-      const submitBtn = document.getElementById('submitBtn');
-      
       nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
       
-      if (data.names && data.names.length > 0) {
-        data.names.forEach(name => {
+      if (names && names.length > 0) {
+        names.forEach(name => {
           let opt = document.createElement('option');
           opt.value = name;
           opt.textContent = name;
           nameSelect.appendChild(opt);
         });
       } else {
-        nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
+        nameSelect.innerHTML = '<option value="">No names found</option>';
       }
       
+      const submitBtn = document.getElementById('submitBtn');
       submitBtn.textContent = "Submit Entry";
-      calculateDuration(); 
+      calculateDuration();
+    }
+
+    // JSONP CALLBACK: Updates UI and commits to localStorage cache
+    window.handleGoogleResponse = function(data) {
+      if (data.names && data.names.length > 0) {
+        populateNameDropdown(data.names);
+        
+        // Cache the result with a timestamp
+        const cacheObject = {
+          timestamp: new Date().getTime(),
+          names: data.names
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheObject));
+      }
     };
 
-    // JSONP INJECTION: Fetches live names and breaks old browser cache blocks
+    // Smart Loader: Checks cache first, falls back to network or local roster
     function loadTeamRoster() {
       const nameSelect = document.getElementById('name');
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      const now = new Date().getTime();
+
+      // 1. If valid cache exists, populate instantly
+      if (cachedData) {
+        const parsedCache = JSON.parse(cachedData);
+        populateNameDropdown(parsedCache.names);
+        
+        // If the cache is still fresh, don't even ping the server
+        if (now - parsedCache.timestamp < CACHE_TIMEOUT) {
+          return; 
+        }
+      }
+
+      // 2. Fetch fresh data in the background (or if cache is expired/missing)
       const scriptElement = document.createElement('script');
-      
-      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
+      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${now}`;
       
       scriptElement.onerror = function() {
-        console.log("Fallback activated due to browser security settings.");
-        nameSelect.innerHTML = `
-          <option value="">-- Choose Roster --</option>
-          <option value="Person 1">Person 1</option>
-          <option value="Person 2">Person 2</option>
-          <option value="Person 3">Person 3</option>
-          <option value="Person 4">Person 4</option>
-        `;
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.textContent = "Submit Entry";
-        calculateDuration();
+        console.log("Network fallback triggered.");
+        // Only override if we don't have cached data already showing
+        if (!localStorage.getItem(CACHE_KEY)) {
+          populateNameDropdown(["Person 1", "Person 2", "Person 3", "Person 4"]);
+        }
       };
       
       document.body.appendChild(scriptElement);
@@ -287,7 +304,7 @@
 
       const payload = {
         name: document.getElementById('name').value,
-        date: document.getElementById('taskDate').value, // Included chosen date in the data package
+        date: document.getElementById('taskDate').value,
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
         taskDetails: document.getElementById('taskDetails').value
