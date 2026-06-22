@@ -137,8 +137,9 @@
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
     const CACHE_KEY = "teamRosterData";
-    const CACHE_TIMEOUT = 60 * 60 * 1000; // Cache duration: 1 Hour (in milliseconds)
+    const CACHE_TIMEOUT = 60 * 60 * 1000; // 1 Hour cache window
 
+    // Sets today's date in local time
     function setDefaultDate() {
       const dateInput = document.getElementById('taskDate');
       const today = new Date();
@@ -147,8 +148,19 @@
       dateInput.value = localDate.toISOString().split('T')[0];
     }
 
+    // Safely parse strings like "08:15 AM" or "08:15AM" into minutes from midnight
     function timeToMinutes(timeStr) {
-      const [time, modifier] = timeStr.split(' ');
+      if (!timeStr) return 0;
+      
+      // Normalize string (ensure uniform spacing for splitting)
+      let cleanStr = timeStr.trim().toUpperCase();
+      if (!cleanStr.includes(' ') && (cleanStr.includes('AM') || cleanStr.includes('PM'))) {
+        cleanStr = cleanStr.replace('AM', ' AM').replace('PM', ' PM');
+      }
+
+      const [time, modifier] = cleanStr.split(' ');
+      if (!time) return 0;
+
       let [hours, minutes] = time.split(':').map(Number);
       
       if (hours === 12) {
@@ -159,6 +171,7 @@
       return (hours * 60) + minutes;
     }
 
+    // Core duration processing calculation logic
     function calculateDuration() {
       const startVal = document.getElementById('startTime').value;
       const endVal = document.getElementById('endTime').value;
@@ -191,6 +204,7 @@
       }
     }
 
+    // Generates select choices from 08:15 AM to 05:30 PM
     function generateTimeOptions() {
       const startSelect = document.getElementById('startTime');
       const endSelect = document.getElementById('endTime');
@@ -201,7 +215,8 @@
       endLimit.setHours(17, 30, 0, 0); 
 
       while (current <= endLimit) {
-        let timeString = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Enforce localized structural matching 
+        let timeString = current.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         
         let optStart = document.createElement('option');
         optStart.value = timeString;
@@ -219,7 +234,7 @@
       if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    // Helper to popular the UI dropdown from an array of names
+    // Helper to change option states safely
     function populateNameDropdown(names) {
       const nameSelect = document.getElementById('name');
       nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
@@ -232,7 +247,7 @@
           nameSelect.appendChild(opt);
         });
       } else {
-        nameSelect.innerHTML = '<option value="">No names found</option>';
+        nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
       }
       
       const submitBtn = document.getElementById('submitBtn');
@@ -240,12 +255,12 @@
       calculateDuration();
     }
 
-    // JSONP CALLBACK: Updates UI and commits to localStorage cache
+    // JSONP Callback pipeline
     window.handleGoogleResponse = function(data) {
-      if (data.names && data.names.length > 0) {
+      if (data && data.names && data.names.length > 0) {
         populateNameDropdown(data.names);
         
-        // Cache the result with a timestamp
+        // Save to LocalStorage cache
         const cacheObject = {
           timestamp: new Date().getTime(),
           names: data.names
@@ -254,30 +269,28 @@
       }
     };
 
-    // Smart Loader: Checks cache first, falls back to network or local roster
+    // Main script initial data processor
     function loadTeamRoster() {
-      const nameSelect = document.getElementById('name');
       const cachedData = localStorage.getItem(CACHE_KEY);
       const now = new Date().getTime();
 
-      // 1. If valid cache exists, populate instantly
+      // If cache exists, process immediately
       if (cachedData) {
         const parsedCache = JSON.parse(cachedData);
         populateNameDropdown(parsedCache.names);
         
-        // If the cache is still fresh, don't even ping the server
+        // If cache is fresh, skip the network round-trip entirely
         if (now - parsedCache.timestamp < CACHE_TIMEOUT) {
           return; 
         }
       }
 
-      // 2. Fetch fresh data in the background (or if cache is expired/missing)
+      // Background Fetch / Initial Empty Cache state processing
       const scriptElement = document.createElement('script');
       scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${now}`;
       
       scriptElement.onerror = function() {
-        console.log("Network fallback triggered.");
-        // Only override if we don't have cached data already showing
+        console.log("Fallback execution active.");
         if (!localStorage.getItem(CACHE_KEY)) {
           populateNameDropdown(["Person 1", "Person 2", "Person 3", "Person 4"]);
         }
@@ -286,7 +299,7 @@
       document.body.appendChild(scriptElement);
     }
 
-    // Initialize Form Rules
+    // Form initialization step execution
     setDefaultDate();
     generateTimeOptions();
     loadTeamRoster();
@@ -295,7 +308,7 @@
     document.getElementById('endTime').addEventListener('change', calculateDuration);
     document.getElementById('name').addEventListener('change', calculateDuration);
 
-    // Form Task Submission Pipeline
+    // Submission management
     document.getElementById('trackerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
