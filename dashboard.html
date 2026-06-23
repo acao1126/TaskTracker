@@ -139,6 +139,27 @@
       }
     });
 
+    // Extract values safely from object properties OR direct numerical index arrays
+    function safeExtractField(item, possibleKeys, arrayIndex) {
+      if (!item) return '';
+      // Try keys first
+      for (let key of possibleKeys) {
+        if (item[key] !== undefined && item[key] !== null) return item[key].toString();
+      }
+      // Fall back to direct array index sniffing if data was mapped as an un-keyed row array
+      if (Array.isArray(item) && item[arrayIndex] !== undefined && item[arrayIndex] !== null) {
+        return item[arrayIndex].toString();
+      }
+      return '';
+    }
+
+    function getItemDate(item) { return safeExtractField(item, ['date', 'Date'], 1); }
+    function getItemName(item) { return safeExtractField(item, ['name', 'Name'], 2); }
+    function getItemTimeWindow(item) { return safeExtractField(item, ['timeWindow', 'TimeWindow', 'combinedTimeRange'], 3); }
+    function getItemDetails(item) { return safeExtractField(item, ['details', 'Details', 'taskDetails', 'activityDetails'], 4); }
+    function getItemDuration(item) { return safeExtractField(item, ['duration', 'Duration'], 5); }
+    function getItemProcessed(item) { return safeExtractField(item, ['itemsProcessed', 'ItemsProcessed', 'processed'], 6); }
+
     function cleanAndParseDate(dateStr) {
       try {
         if (!dateStr || dateStr === "undefined") return null;
@@ -153,7 +174,7 @@
         if (!isNaN(dObj.getTime())) {
           return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
         }
-      } catch(e) { console.error("Date error:", e); }
+      } catch(e) {}
       return null;
     }
 
@@ -174,12 +195,12 @@
     }
 
     function getStartTimeInMinutes(timeWindowStr) {
-      if (!timeWindowStr || typeof timeWindowStr !== 'string' || !timeWindowStr.includes(' - ')) return 0;
+      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
       return parseSingleTimeToMinutes(timeWindowStr.split(' - ')[0]);
     }
 
     function getHourBlockLabel(timeWindowStr) {
-      if (!timeWindowStr || typeof timeWindowStr !== 'string' || !timeWindowStr.includes(' - ')) return "Unknown Time";
+      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return "Unknown Time";
       const startTimePart = timeWindowStr.split(' - ')[0];
       const parts = startTimePart.split(' ');
       if (parts.length < 2) return "Unknown Time";
@@ -203,7 +224,7 @@
           populateDropdowns(JSON.parse(cachedNames) || [], rawDataHistory);
           buildGroupedDashboard(activeNameFilter, activeDateFilter);
           document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
-        } catch(e) { console.error("Cache build failed:", e); }
+        } catch(e) {}
       } else {
         document.getElementById('syncText').textContent = "Downloading databases from Google Sheet...";
       }
@@ -224,7 +245,7 @@
       
       if(Array.isArray(historyData)) {
         const uniqueDates = [...new Set(historyData
-          .map(item => item ? cleanAndParseDate(item.date) : null)
+          .map(item => item ? cleanAndParseDate(getItemDate(item)) : null)
           .filter(d => d !== null)
         )].sort((a,b) => b.localeCompare(a));
         
@@ -301,8 +322,9 @@
     function calculateNonOverlappingMinutes(itemsArray) {
       let intervals = [];
       itemsArray.forEach(item => {
-        if (!item || !item.timeWindow || typeof item.timeWindow !== 'string' || !item.timeWindow.includes(' - ')) return;
-        let parts = item.timeWindow.split(' - ');
+        let tw = getItemTimeWindow(item);
+        if (!tw || !tw.includes(' - ')) return;
+        let parts = tw.split(' - ');
         let start = parseSingleTimeToMinutes(parts[0]);
         let end = parseSingleTimeToMinutes(parts[1]);
         if (start < end) intervals.push({ start: start, end: end });
@@ -339,21 +361,29 @@
       let globalFilteredItems = [];
 
       rawDataHistory.forEach(item => {
-        if (!item || !item.date || !item.timeWindow) return;
-        let normalizedDate = cleanAndParseDate(item.date);
-        if (!item.name || !normalizedDate) return;
+        if (!item) return;
+        let rawDate = getItemDate(item);
+        let rawTimeWindow = getItemTimeWindow(item);
+        let rawName = getItemName(item);
+
+        if (!rawDate || !rawTimeWindow || !rawName) return;
+        let normalizedDate = cleanAndParseDate(rawDate);
+        if (!normalizedDate) return;
         
-        const matchesName = (selectedName === "ALL" || item.name === selectedName);
+        const matchesName = (selectedName === "ALL" || rawName === selectedName);
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
         
         if (matchesName && matchesDate) {
           selectedLogsCount++;
-          if (item.itemsProcessed && item.itemsProcessed !== "-") totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
-          uniqueActiveMembers.add(item.name);
+          let rawProcessed = getItemProcessed(item);
+          if (rawProcessed && rawProcessed !== "-") {
+            totalItemsProcessedCount += parseInt(rawProcessed, 10) || 0;
+          }
+          uniqueActiveMembers.add(rawName);
           globalFilteredItems.push(item);
           
           if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, itemsList: [] };
-          const hourLabel = getHourBlockLabel(item.timeWindow);
+          const hourLabel = getHourBlockLabel(rawTimeWindow);
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
           groupedData[normalizedDate].hours[hourLabel].push(item);
           groupedData[normalizedDate].itemsList.push(item);
@@ -372,14 +402,13 @@
       sortedDates.forEach(date => {
         const dateGroup = groupedData[date];
         
-        // SAFE FALLBACK DATE PARSING: Bypasses browser string format strict crashes completely
         let displayDateText = date;
         try {
           const dateObj = new Date(date + "T00:00:00");
           if (!isNaN(dateObj.getTime())) {
             displayDateText = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
           }
-        } catch(err) { console.error("Formatting skip applied for:", date); }
+        } catch(err) {}
 
         let dateUniqueMinutes = calculateNonOverlappingMinutes(dateGroup.itemsList);
 
@@ -396,11 +425,13 @@
         dateGroupDiv.appendChild(headerDiv);
 
         const dateContentDiv = document.createElement('div'); dateContentDiv.className = 'date-content is-hidden';
-        const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow));
+        const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => {
+          return getStartTimeInMinutes(getItemTimeWindow(dateGroup.hours[a][0])) - getStartTimeInMinutes(getItemTimeWindow(dateGroup.hours[b][0]));
+        });
         
         sortedHours.forEach(hourLabel => {
           const tasksInHour = dateGroup.hours[hourLabel];
-          tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
+          tasksInHour.sort((a, b) => getStartTimeInMinutes(getItemTimeWindow(a)) - getStartTimeInMinutes(getItemTimeWindow(b)));
           
           const hourBlockDiv = document.createElement('div'); hourBlockDiv.className = 'hour-block';
           const hourHeaderSpan = document.createElement('div'); hourHeaderSpan.className = 'hour-header collapsed'; 
@@ -412,14 +443,12 @@
           const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
-            let cleanName = escapeTextHTML(item.name || 'Unknown');
-            let cleanTime = escapeTextHTML(item.timeWindow || '00:00 - 00:00');
-            
-            let rawDetailsField = item.details || item.taskDetails || '-';
-            let cleanDetails = escapeTextHTML(rawDetailsField);
-            
-            let cleanDuration = escapeTextHTML(item.duration || '0 mins');
-            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(item.itemsProcessed)}</strong>` : '';
+            let cleanName = escapeTextHTML(getItemName(item) || 'Unknown');
+            let cleanTime = escapeTextHTML(getItemTimeWindow(item) || '00:00 - 00:00');
+            let cleanDetails = escapeTextHTML(getItemDetails(item) || '-');
+            let cleanDuration = escapeTextHTML(getItemDuration(item) || '0 mins');
+            let rawProcessed = getItemProcessed(item);
+            let itemsText = (rawProcessed && rawProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(rawProcessed)}</strong>` : '';
             
             let card = document.createElement('div'); 
             card.className = 'log-card';
