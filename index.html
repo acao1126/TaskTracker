@@ -3,319 +3,195 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dynamic Team Task Tracker</title>
+  <title>Team Task Logger</title>
   <style>
-    /* 1. Light Mode Variables (Default) */
     :root {
-      --bg-color: #f9f9f9;
-      --card-bg: #ffffff;
-      --text-color: #333333;
-      --text-muted: #666666;
-      --border-color: #cccccc;
-      --input-bg: #ffffff;
-      --btn-bg: #0070f3;
-      --btn-hover: #0051a8;
-      --success-color: #2e7d32;
-      --error-color: #d32f2f;
+      --bg-color: #f4f6f8; --card-bg: #ffffff; --text-color: #333333; --text-muted: #666666;
+      --border-color: #e1e4e8; --accent-color: #0070f3; --accent-hover: #0051ba; --success-color: #22c55e;
     }
-
-    /* 2. Dark Mode Variables (Applies automatically based on OS/Device settings) */
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg-color: #121212;
-        --card-bg: #1e1e1e;
-        --text-color: #f5f5f5;
-        --text-muted: #aaaaaa;
-        --border-color: #444444;
-        --input-bg: #2d2d2d;
-        --btn-bg: #3291ff;
-        --btn-hover: #0070f3;
-        --success-color: #4caf50;
-        --error-color: #f44336;
+        --bg-color: #121212; --card-bg: #1e1e1e; --text-color: #f5f5f5; --text-muted: #aaaaaa;
+        --border-color: #333333; --accent-color: #3291ff; --accent-hover: #0070f3; --success-color: #4ade80;
       }
     }
-
-    /* 3. Layout Styles */
-    body { 
-      font-family: system-ui, sans-serif; 
-      max-width: 500px; 
-      margin: 40px auto; 
-      padding: 20px; 
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      transition: background-color 0.3s, color 0.3s;
-    }
-    
-    form {
-      background: var(--card-bg);
-      padding: 25px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
-    .time-row { display: flex; gap: 15px; margin-bottom: 5px; }
+    body { font-family: system-ui, sans-serif; background-color: var(--bg-color); color: var(--text-color); max-width: 600px; margin: 0 auto; padding: 40px 20px; transition: background-color 0.3s, color 0.3s; }
+    .form-container { background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
+    h1 { margin-top: 0; margin-bottom: 25px; font-size: 24px; text-align: center; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+    select, input, textarea { width: 100%; padding: 10px 12px; font-size: 15px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); box-sizing: border-box; }
+    select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent-color); }
+    .time-row { display: flex; gap: 15px; }
     .time-row .form-group { flex: 1; margin-bottom: 0; }
+    textarea { resize: vertical; min-height: 100px; }
+    button { width: 100%; padding: 12px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: var(--accent-color); border: none; border-radius: 6px; cursor: pointer; }
+    button:hover { background-color: var(--accent-hover); }
+    button:disabled { background-color: var(--text-muted); cursor: not-allowed; }
+    .status-msg { margin-top: 20px; padding: 12px; border-radius: 6px; text-align: center; font-size: 14px; font-weight: 500; display: none; }
+    .status-msg.success { background: rgba(34, 197, 94, 0.1); color: var(--success-color); border: 1px solid var(--success-color); }
+    .status-msg.error { background: rgba(211, 47, 47, 0.1); color: #f44336; border: 1px solid #f44336; }
     
-    label { font-weight: bold; margin-bottom: 5px; }
-    
-    select, input, textarea, button { 
-      padding: 10px; 
-      font-size: 16px; 
-      border-radius: 6px; 
-      border: 1px solid var(--border-color); 
-      background-color: var(--input-bg);
-      color: var(--text-color);
-      font-family: inherit;
-    }
-    
-    select:focus, input:focus, textarea:focus {
-      outline: 2px solid var(--btn-bg);
-    }
-    
-    textarea { height: 100px; resize: vertical; }
-    
-    button { 
-      background: var(--btn-bg); 
-      color: white; 
-      border: none; 
-      cursor: pointer; 
-      font-weight: bold; 
-      margin-top: 10px; 
-    }
-    button:hover { background: var(--btn-hover); }
-    button:disabled { background: var(--border-color); color: var(--text-muted); cursor: not-allowed; }
-    
-    .duration-display { 
-      font-size: 14px; 
-      margin-bottom: 15px; 
-      font-weight: 500;
-      color: var(--text-muted);
-    }
-    .error-text { color: var(--error-color); }
-    .success-text { color: var(--success-color); }
+    /* Gate Overlay for Input authentication validation fields */
+    .logger-gate-row { background: rgba(0,0,0,0.02); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed var(--border-color); }
   </style>
 </head>
 <body>
 
-  <h2>Team Task Tracker</h2>
-  <form id="trackerForm">
+  <div class="form-container">
+    <h1>Log Today's Task</h1>
     
-    <div class="form-group">
-      <label for="name">Who are you?</label>
-      <select id="name" required>
-        <option value="">Loading team list...</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="taskDate">Date:</label>
-      <input type="date" id="taskDate" required>
-    </div>
-
-    <div class="time-row">
-      <div class="form-group">
-        <label for="startTime">From:</label>
-        <select id="startTime" required></select>
+    <form id="taskForm" onsubmit="submitTaskForm(event)">
+      
+      <div class="logger-gate-row form-group">
+        <label for="formToken">🔒 Authorization Key PIN:</label>
+        <input type="password" id="formToken" maxlength="6" placeholder="Enter team security code to write data..." required oninput="evaluateKeyToken(this)">
       </div>
-      <div class="form-group">
-        <label for="endTime">To:</label>
-        <select id="endTime" required></select>
+
+      <div id="formFieldsBlock" style="opacity: 0.4; pointer-events: none; transition: opacity 0.3s;">
+        <div class="form-group">
+          <label for="formName">Team Member Name:</label>
+          <select id="formName" required><option value="" disabled selected>Awaiting structural authorization key...</option></select>
+        </div>
+
+        <div class="form-group">
+          <label for="formDate">Date:</label>
+          <input type="date" id="formDate" required>
+        </div>
+
+        <div class="time-row form-group">
+          <div class="form-group"><label for="formStartTime">Start Time:</label><select id="formStartTime" required></select></div>
+          <div class="form-group"><label for="formEndTime">End Time:</label><select id="formEndTime" required></select></div>
+        </div>
+
+        <div style="margin-bottom: 20px;"></div>
+
+        <div class="form-group">
+          <label for="formDetails">Task / Activity Details:</label>
+          <textarea id="formDetails" placeholder="Describe the work completed during this block..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="formItems">Items Processed (Optional):</label>
+          <input type="number" id="formItems" min="0" placeholder="e.g. 25">
+        </div>
+
+        <button type="submit" id="submitBtn" disabled>Submit Task Log</button>
       </div>
-    </div>
+    </form>
 
-    <div id="durationDisplay" class="duration-display"></div>
-
-    <div class="form-group">
-      <label for="taskDetails">What did you accomplish?</label>
-      <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
-    </div>
-
-    <div class="form-group">
-      <label for="itemsProcessed">Number of Items Processed:</label>
-      <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 25 (leave blank if N/A)">
-    </div>
-
-    <button type="submit" id="submitBtn" disabled>Loading Form...</button>
-  </form>
+    <div id="statusAlert" class="status-msg"></div>
+  </div>
 
   <script>
+    // 1. Direct Target Script URL Deployment Link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
 
-    // Helper to calculate and set today's date in local time (YYYY-MM-DD format)
-    function setDefaultDate() {
-      const dateInput = document.getElementById('taskDate');
-      const today = new Date();
-      const offset = today.getTimezoneOffset();
-      const localDate = new Date(today.getTime() - (offset * 60 * 1000));
-      dateInput.value = localDate.toISOString().split('T')[0];
-    }
+    // Both secure verification write parameters
+    const _0x0a1 = [53,56,57,54,52,51]; // Code: "589643"
+    const _0x0a2 = [52,50,56,51,55,55]; // Code: "428377"
 
-    // Helper to turn strings like "08:15 AM" into minutes from midnight
-    function timeToMinutes(timeStr) {
-      const [time, modifier] = timeStr.split(' ');
-      let [hours, minutes] = time.split(':').map(Number);
-      
-      if (hours === 12) {
-        hours = (modifier === 'AM') ? 0 : 12;
-      } else if (modifier === 'PM') {
-        hours += 12;
+    function _vK(pStr) {
+      if(pStr.length !== 6) return false;
+      let m1 = true, m2 = true;
+      for(let i=0; i<6; i++) {
+        if (pStr.charCodeAt(i) !== _0x0a1[i]) m1 = false;
+        if (pStr.charCodeAt(i) !== _0x0a2[i]) m2 = false;
       }
-      return (hours * 60) + minutes;
+      return (m1 || m2);
     }
 
-    // Live duration calculator and logic validator
-    function calculateDuration() {
-      const startVal = document.getElementById('startTime').value;
-      const endVal = document.getElementById('endTime').value;
-      const display = document.getElementById('durationDisplay');
-      const submitBtn = document.getElementById('submitBtn');
+    window.addEventListener('DOMContentLoaded', () => {
+      const today = new Date();
+      document.getElementById('formDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      generateTimeDropdownOptions();
 
-      if (!startVal || !endVal) return;
+      // Auto-populate form if the user has a valid saved token in localStorage
+      const cachedToken = localStorage.getItem('tracker_write_token');
+      if(cachedToken && _vK(cachedToken)) {
+        document.getElementById('formToken').value = cachedToken;
+        evaluateKeyToken(document.getElementById('formToken'));
+      }
+    });
 
-      const startMinutes = timeToMinutes(startVal);
-      const endMinutes = timeToMinutes(endVal);
-      const diff = endMinutes - startMinutes;
-
-      if (diff <= 0) {
-        display.innerHTML = "<span class='error-text'>⚠️ End time must be after start time.</span>";
-        submitBtn.disabled = true;
-      } else {
-        const hours = Math.floor(diff / 60);
-        const minutes = diff % 60;
-        
-        let durationText = "⏱️ Total Time: ";
-        if (hours > 0) durationText += `${hours} hr${hours > 1 ? 's' : ''} `;
-        if (minutes > 0) durationText += `${minutes} mins`;
-        
-        display.innerHTML = `<span class='success-text'>${durationText}</span>`;
-        
-        submitBtn.disabled = false;
-        if (submitBtn.textContent === "Loading Form...") {
-          submitBtn.textContent = "Submit Entry";
+    function generateTimeDropdownOptions() {
+      const startSelect = document.getElementById('formStartTime');
+      const endSelect = document.getElementById('formEndTime');
+      const periods = ['AM', 'PM'];
+      for (let p = 0; p < periods.length; p++) {
+        for (let h = 0; h < 12; h++) {
+          const hour = h === 0 ? 12 : h; const displayHour = hour < 10 ? '0' + hour : hour;
+          for (let m = 0; m < 60; m += 15) {
+            const minutes = m === 0 ? '00' : m; const timeString = `${displayHour}:${minutes} ${periods[p]}`;
+            let oS = document.createElement('option'); oS.value = timeString; oS.textContent = timeString; startSelect.appendChild(oS);
+            let oE = document.createElement('option'); oE.value = timeString; oE.textContent = timeString; endSelect.appendChild(oE);
+          }
         }
       }
+      startSelect.value = "08:00 AM"; endSelect.value = "09:00 AM";
     }
 
-    // Programmatically generates choices from 8:15 AM to 5:30 PM
-    function generateTimeOptions() {
-      const startSelect = document.getElementById('startTime');
-      const endSelect = document.getElementById('endTime');
-      
-      let current = new Date();
-      current.setHours(8, 15, 0, 0); 
-      const endLimit = new Date();
-      endLimit.setHours(17, 30, 0, 0); 
-
-      while (current <= endLimit) {
-        let timeString = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        let optStart = document.createElement('option');
-        optStart.value = timeString;
-        optStart.textContent = timeString;
-        startSelect.appendChild(optStart);
-
-        let optEnd = document.createElement('option');
-        optEnd.value = timeString;
-        optEnd.textContent = timeString;
-        endSelect.appendChild(optEnd);
-
-        current.setMinutes(current.getMinutes() + 15); 
-      }
-      
-      if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
-    }
-
-    // JSONP CALLBACK: Activated when Google sends data back successfully
-    window.handleGoogleResponse = function(data) {
-      const nameSelect = document.getElementById('name');
-      const submitBtn = document.getElementById('submitBtn');
-      
-      nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
-      
-      if (data.names && data.names.length > 0) {
-        data.names.forEach(name => {
-          let opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          nameSelect.appendChild(opt);
-        });
+    // Unlocks forms dynamically on matching token input
+    function evaluateKeyToken(inputEl) {
+      const tokenVal = inputEl.value;
+      if(_vK(tokenVal)) {
+        localStorage.setItem('tracker_write_token', tokenVal);
+        document.getElementById('formFieldsBlock').style.opacity = "1";
+        document.getElementById('formFieldsBlock').style.pointerEvents = "auto";
+        document.getElementById('submitBtn').disabled = false;
+        loadRosterDatabase(tokenVal);
       } else {
-        nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
+        document.getElementById('formFieldsBlock').style.opacity = "0.4";
+        document.getElementById('formFieldsBlock').style.pointerEvents = "none";
+        document.getElementById('submitBtn').disabled = true;
       }
-      
-      submitBtn.textContent = "Submit Entry";
-      calculateDuration(); 
-    };
+    }
 
-    // JSONP INJECTION: Fetches live names and breaks old browser cache blocks
-    function loadTeamRoster() {
-      const nameSelect = document.getElementById('name');
-      const scriptElement = document.createElement('script');
-      
-      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
-      
-      scriptElement.onerror = function() {
-        console.log("Fallback activated due to browser security settings.");
-        nameSelect.innerHTML = `
-          <option value="">-- Choose Roster --</option>
-          <option value="Person 1">Person 1</option>
-          <option value="Person 2">Person 2</option>
-          <option value="Person 3">Person 3</option>
-          <option value="Person 4">Person 4</option>
-        `;
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.textContent = "Submit Entry";
-        calculateDuration();
+    function loadRosterDatabase(validToken) {
+      window.handleGoogleResponse = function(data) {
+        const nameSelect = document.getElementById('formName');
+        nameSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+        if (data && data.names) {
+          data.names.forEach(name => {
+            let opt = document.createElement('option'); opt.value = name; opt.textContent = name; nameSelect.appendChild(opt);
+          });
+        }
       };
-      
+      const scriptElement = document.createElement('script');
+      scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + validToken + "&_cb=" + new Date().getTime();
       document.body.appendChild(scriptElement);
     }
 
-    // Initialize Form
-    setDefaultDate();
-    generateTimeOptions();
-    loadTeamRoster();
-
-    document.getElementById('startTime').addEventListener('change', calculateDuration);
-    document.getElementById('endTime').addEventListener('change', calculateDuration);
-    document.getElementById('name').addEventListener('change', calculateDuration);
-
-    // Form Task Submission Pipeline
-    document.getElementById('trackerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('submitBtn');
-      btn.textContent = "Saving...";
-      btn.disabled = true;
+    function submitTaskForm(event) {
+      event.preventDefault();
+      const submitBtn = document.getElementById('submitBtn');
+      const alertBox = document.getElementById('statusAlert');
+      submitBtn.disabled = true; submitBtn.textContent = "Saving log down to Google Sheets...";
+      alertBox.style.display = "none";
 
       const payload = {
-        name: document.getElementById('name').value,
-        date: document.getElementById('taskDate').value,
-        startTime: document.getElementById('startTime').value,
-        endTime: document.getElementById('endTime').value,
-        itemsProcessed: document.getElementById('itemsProcessed').value, 
-        taskDetails: document.getElementById('taskDetails').value
+        token: document.getElementById('formToken').value,
+        name: document.getElementById('formName').value,
+        date: document.getElementById('formDate').value,
+        startTime: document.getElementById('formStartTime').value,
+        endTime: document.getElementById('formEndTime').value,
+        taskDetails: document.getElementById('formDetails').value,
+        itemsProcessed: document.getElementById('formItems').value
       };
 
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        alert("Task logged successfully!");
-        document.getElementById('taskDetails').value = ""; 
-        document.getElementById('itemsProcessed').value = ""; 
-      } catch (error) {
-        alert("Something went wrong. Please try again.");
-      } finally {
-        btn.textContent = "Submit Entry";
-        btn.disabled = false;
-        calculateDuration(); 
-      }
-    });
+      fetch(SCRIPT_URL, {
+        method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+      })
+      .then(() => {
+        alertBox.className = "status-msg success"; alertBox.textContent = "✔ Success! Task log entry safely saved."; alertBox.style.display = "block";
+        document.getElementById('formDetails').value = ""; document.getElementById('formItems').value = "";
+        submitBtn.disabled = false; submitBtn.textContent = "Submit Task Log";
+      })
+      .catch(err => {
+        alertBox.className = "status-msg error"; alertBox.textContent = "❌ Connection failed: " + err.toString(); alertBox.style.display = "block";
+        submitBtn.disabled = false; submitBtn.textContent = "Submit Task Log";
+      });
+    }
   </script>
 </body>
 </html>
