@@ -101,7 +101,7 @@
       font-weight: 500;
     }
 
-    /* Dashboard States */
+    /* Dashboard Content State */
     #dashboardContent { display: none; }
 
     .metrics-row {
@@ -124,6 +124,7 @@
     .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
 
+    /* Clean Dual Filter Control Layout Row */
     .filter-box {
       background: var(--card-bg);
       padding: 15px 20px;
@@ -131,8 +132,15 @@
       margin-bottom: 30px;
       border: 1px solid var(--border-color);
       display: flex;
-      gap: 15px;
+      gap: 20px;
       align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .filter-box select {
@@ -161,7 +169,6 @@
 
     .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; }
 
-    /* --- HOURLY CONTAINER DESIGN --- */
     .hour-block {
       margin-bottom: 25px;
       padding-left: 10px;
@@ -292,10 +299,19 @@
     <h2>Activity Feed</h2>
     
     <div class="filter-box">
-      <label for="filterName">Filter by Member:</label>
-      <select id="filterName" onchange="applyFilters()">
-        <option value="ALL">All Team Members</option>
-      </select>
+      <div class="filter-group">
+        <label for="filterName">Filter by Member:</label>
+        <select id="filterName" onchange="applyFilters()">
+          <option value="ALL">All Team Members</option>
+        </select>
+      </div>
+      
+      <div class="filter-group">
+        <label for="filterDate">Filter by Date:</label>
+        <select id="filterDate" onchange="applyFilters()">
+          <option value="ALL">All Dates</option>
+        </select>
+      </div>
     </div>
 
     <div class="sync-status">
@@ -311,7 +327,8 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     
     let rawDataHistory = [];
-    let activeFilter = "ALL";
+    let activeNameFilter = "ALL";
+    let activeDateFilter = "ALL";
 
     function moveFocus(current, nextIndex) {
       if (current.value.length === 1) {
@@ -356,7 +373,6 @@
       document.querySelectorAll('.pin-box')[0].focus();
     });
 
-    // Helper: Extracts the start time into raw integer minutes from midnight
     function getStartTimeInMinutes(timeWindowStr) {
       if (!timeWindowStr) return 0;
       const startTimePart = timeWindowStr.split(' - ')[0];
@@ -373,7 +389,6 @@
       return (hours * 60) + minutes;
     }
 
-    // Helper: Determines which hourly block banner a task should fall under
     function getHourBlockLabel(timeWindowStr) {
       if (!timeWindowStr) return "Unknown Time";
       const startTimePart = timeWindowStr.split(' - ')[0];
@@ -383,17 +398,12 @@
       
       let hours = parseInt(time.split(':')[0], 10);
       
-      // Enforces clean standard top-of-the-hour blocks (e.g., "08:00 AM - 09:00 AM")
       let startHourText = hours < 10 ? "0" + hours : hours;
       let endHourText = (hours + 1) < 10 ? "0" + (hours + 1) : (hours + 1);
       
-      if (hours === 11 && modifier === "AM") {
-        return "11:00 AM - 12:00 PM";
-      } else if (hours === 12 && modifier === "PM") {
-        return "12:00 PM - 01:00 PM";
-      } else if (hours === 12 && modifier === "AM") {
-        return "12:00 AM - 01:00 AM";
-      }
+      if (hours === 11 && modifier === "AM") return "11:00 AM - 12:00 PM";
+      if (hours === 12 && modifier === "PM") return "12:00 PM - 01:00 PM";
+      if (hours === 12 && modifier === "AM") return "12:00 AM - 01:00 AM";
       
       return `${startHourText}:00 ${modifier} - ${endHourText}:00 ${modifier}`;
     }
@@ -424,8 +434,8 @@
 
       if (cachedData && cachedNames) {
         rawDataHistory = JSON.parse(cachedData);
-        populateDropdown(JSON.parse(cachedNames));
-        buildGroupedDashboard(activeFilter);
+        populateDropdowns(JSON.parse(cachedNames), rawDataHistory);
+        buildGroupedDashboard(activeNameFilter, activeDateFilter);
         document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
       } else {
         document.getElementById('syncText').textContent = "No cache found. Downloading master sheet databases...";
@@ -433,17 +443,35 @@
       fetchFreshCloudData();
     }
 
-    function populateDropdown(namesArray) {
-      const filterSelect = document.getElementById('filterName');
-      const currentSelection = filterSelect.value;
-      filterSelect.innerHTML = '<option value="ALL">All Team Members</option>';
+    // Populates both dropdown select groups dynamically based on available dataset logs
+    function populateDropdowns(namesArray, historyData) {
+      // 1. Populate Roster Dropdown
+      const nameSelect = document.getElementById('filterName');
+      const currentNameSelection = nameSelect.value;
+      nameSelect.innerHTML = '<option value="ALL">All Team Members</option>';
       namesArray.forEach(name => {
         let opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        filterSelect.appendChild(opt);
+        opt.value = name; opt.textContent = name; nameSelect.appendChild(opt);
       });
-      if(currentSelection) filterSelect.value = currentSelection;
+      if(currentNameSelection) nameSelect.value = currentNameSelection;
+
+      // 2. Extrapolate and Populate Unique Dates Dropdown (Sorted newest first)
+      const dateSelect = document.getElementById('filterDate');
+      const currentDateSelection = dateSelect.value;
+      dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
+      
+      const uniqueDates = [...new Set(historyData.map(item => item.date))].sort((a,b) => b.localeCompare(a));
+      
+      uniqueDates.forEach(date => {
+        const dateObj = new Date(date + "T00:00:00");
+        const formattedLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        let opt = document.createElement('option');
+        opt.value = date;
+        opt.textContent = formattedLabel;
+        dateSelect.appendChild(opt);
+      });
+      if(currentDateSelection) dateSelect.value = currentDateSelection;
     }
 
     window.handleGoogleResponse = function(data) {
@@ -453,8 +481,8 @@
       localStorage.setItem('tracker_dashboard_cache', JSON.stringify(rawDataHistory));
       localStorage.setItem('tracker_names_cache', JSON.stringify(incomingNames));
 
-      populateDropdown(incomingNames);
-      buildGroupedDashboard(activeFilter);
+      populateDropdowns(incomingNames, rawDataHistory);
+      buildGroupedDashboard(activeNameFilter, activeDateFilter);
 
       const dot = document.getElementById('syncDot');
       const txt = document.getElementById('syncText');
@@ -471,8 +499,8 @@
       document.body.appendChild(scriptElement);
     }
 
-    // Core Processing Engine
-    function buildGroupedDashboard(selectedName) {
+    // Core Dual-Filtering Dashboard Engine
+    function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
 
@@ -484,19 +512,21 @@
       const groupedData = {};
 
       rawDataHistory.forEach(item => {
+        // Core metrics totals are calculated across the board
         if (item.date === todayStr) logsTodayCount++;
         if (item.itemsProcessed && item.itemsProcessed !== "-") {
           totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
         }
         if (item.name) uniqueActiveMembers.add(item.name);
 
+        // --- MATURING FILTER EVALUATION CONDITIONS ---
         if (selectedName !== "ALL" && item.name !== selectedName) return;
+        if (selectedDate !== "ALL" && item.date !== selectedDate) return;
 
         if (!groupedData[item.date]) {
           groupedData[item.date] = { hours: {}, totalMinutes: 0 };
         }
         
-        // Match item into its hour bucket identifier string
         const hourLabel = getHourBlockLabel(item.timeWindow);
         if (!groupedData[item.date].hours[hourLabel]) {
           groupedData[item.date].hours[hourLabel] = [];
@@ -510,10 +540,10 @@
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
 
-      const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a)); // Newest calendar day on top
+      const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a));
 
       if (sortedDates.length === 0) {
-        feedContainer.innerHTML = "<div class='status-loading'>No task logs match this team selection.</div>";
+        feedContainer.innerHTML = "<div class='status-loading'>No task logs match your chosen query filters.</div>";
         return;
       }
 
@@ -525,7 +555,6 @@
         const dateGroupDiv = document.createElement('div');
         dateGroupDiv.className = 'date-group';
 
-        // Outer Main Header (Date and Summed Hours)
         const headerDiv = document.createElement('div');
         headerDiv.className = 'date-header';
         headerDiv.innerHTML = `
@@ -534,28 +563,22 @@
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        // Sort hour keys chronologically based on their first entries
         const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => {
           return getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow);
         });
 
-        // Loop through each Hour Block
         sortedHours.forEach(hourLabel => {
           const tasksInHour = dateGroup.hours[hourLabel];
-          
-          // Sort individual cards inside the hour block (Earliest first)
           tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
 
           const hourBlockDiv = document.createElement('div');
           hourBlockDiv.className = 'hour-block';
 
-          // Inner sub-header for the hour block
           const hourHeaderSpan = document.createElement('div');
           hourHeaderSpan.className = 'hour-header';
           hourHeaderSpan.textContent = `⏰ ${hourLabel}`;
           hourBlockDiv.appendChild(hourHeaderSpan);
 
-          // Grid for cards in this hour block
           const logGrid = document.createElement('div');
           logGrid.className = 'log-grid';
 
@@ -589,8 +612,9 @@
     }
 
     function applyFilters() {
-      activeFilter = document.getElementById('filterName').value;
-      buildGroupedDashboard(activeFilter);
+      activeNameFilter = document.getElementById('filterName').value;
+      activeDateFilter = document.getElementById('filterDate').value;
+      buildGroupedDashboard(activeNameFilter, activeDateFilter);
     }
   </script>
 </body>
