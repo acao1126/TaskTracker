@@ -354,10 +354,10 @@
       return null;
     }
 
-    function getStartTimeInMinutes(timeWindowStr) {
-      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
-      const startTimePart = timeWindowStr.split(' - ')[0];
-      const parts = startTimePart.split(' ');
+    // Helper to parse individual single timestamp blocks ("08:30 AM") into clean scalar integer minutes
+    function parseSingleTimeToMinutes(timeStr) {
+      if (!timeStr) return 0;
+      const parts = timeStr.trim().split(' ');
       if (parts.length < 2) return 0;
       const time = parts[0]; const modifier = parts[1];
       let [hours, minutes] = time.split(':').map(Number);
@@ -365,6 +365,11 @@
       if (hours === 12) hours = (modifier === 'AM') ? 0 : 12;
       else if (modifier === 'PM') hours += 12;
       return (hours * 60) + minutes;
+    }
+
+    function getStartTimeInMinutes(timeWindowStr) {
+      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
+      return parseSingleTimeToMinutes(timeWindowStr.split(' - ')[0]);
     }
 
     function getHourBlockLabel(timeWindowStr) {
@@ -381,25 +386,6 @@
       if (hours === 12 && modifier === "PM") return "12:00 PM - 01:00 PM";
       if (hours === 12 && modifier === "AM") return "12:00 AM - 01:00 AM";
       return `${startHourText}:00 ${modifier} - ${endHourText}:00 ${modifier}`;
-    }
-
-    function parseDurationToMinutes(durationStr) {
-      if (!durationStr || durationStr === "0 mins") return 0;
-      let totalMinutes = 0;
-      const hourMatch = durationStr.match(/(\d+)\s*hr/);
-      const minMatch = durationStr.match(/(\d+)\s*min/);
-      if (hourMatch) totalMinutes += parseInt(hourMatch[1], 10) * 60;
-      if (minMatch) totalMinutes += parseInt(minMatch[1], 10);
-      return totalMinutes;
-    }
-
-    function formatMinutesToText(totalMinutes) {
-      if (totalMinutes === 0) return "0 mins";
-      const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60;
-      let output = [];
-      if (hours > 0) output.push(`${hours} hr${hours > 1 ? 's' : ''}`);
-      if (minutes > 0) output.push(`${minutes} mins`);
-      return output.join(" ");
     }
 
     function initializeWithCache() {
@@ -476,8 +462,6 @@
       headerEl.classList.toggle('collapsed');
       const targetContent = headerEl.nextElementSibling;
       targetContent.classList.toggle('is-hidden');
-      
-      // Smart check: If user manually collapses the parent row, sync button state to "Expand All"
       if(headerEl.classList.contains('collapsed')) {
         const toggleBtn = headerEl.querySelector('.expand-all-action-link');
         toggleBtn.textContent = "Expand All";
@@ -490,37 +474,69 @@
       targetContent.classList.toggle('is-hidden');
     }
 
-    // --- UPDATED: DUAL ACTION MASS ACCORDION CONTROLLER ---
     function toggleAllHoursInDate(event, linkEl) {
-      event.stopPropagation(); // Stop parent bar click trigger
-      
+      event.stopPropagation(); 
       const parentDateGroup = linkEl.closest('.date-group');
       const dateHeader = parentDateGroup.querySelector('.date-header');
       const dateContent = parentDateGroup.querySelector('.date-content');
       const hourHeaders = parentDateGroup.querySelectorAll('.hour-header');
       const hourContents = parentDateGroup.querySelectorAll('.hour-content');
-      
       const isExpanding = linkEl.textContent === "Expand All";
       
       if (isExpanding) {
-        // --- MASS EXPAND ACTION ---
         linkEl.textContent = "Collapse All";
-        
         dateHeader.classList.remove('collapsed');
         dateContent.classList.remove('is-hidden');
-        
         hourHeaders.forEach(header => header.classList.remove('collapsed'));
         hourContents.forEach(content => content.classList.remove('is-hidden'));
       } else {
-        // --- MASS COLLAPSE ACTION ---
         linkEl.textContent = "Expand All";
-        
         dateHeader.classList.add('collapsed');
         dateContent.classList.add('is-hidden');
-        
         hourHeaders.forEach(header => header.classList.add('collapsed'));
         hourContents.forEach(content => content.classList.add('is-hidden'));
       }
+    }
+
+    // --- ALGORITHMIC INTERVAL MERGING ROUTINE ---
+    // Evaluates a set of item rows, merges any overlaps, and returns unique minutes worked
+    function calculateNonOverlappingMinutes(itemsArray) {
+      let intervals = [];
+      itemsArray.forEach(item => {
+        if (!item.timeWindow || !item.timeWindow.includes(' - ')) return;
+        let parts = item.timeWindow.split(' - ');
+        let start = parseSingleTimeToMinutes(parts[0]);
+        let end = parseSingleTimeToMinutes(parts[1]);
+        if (start < end) {
+          intervals.push({ start: start, end: end });
+        }
+      });
+
+      if (intervals.length === 0) return 0;
+
+      // Sort chronologically by start window minute scalar
+      intervals.sort((a, b) => a.start - b.start);
+
+      // Merge running overlapping boundary items
+      let merged = [intervals[0]];
+      for (let i = 1; i < intervals.length; i++) {
+        let current = intervals[i];
+        let lastMerged = merged[merged.length - 1];
+
+        if (current.start <= lastMerged.end) {
+          // Flatten overlap by pulling out the end threshold limit bounds
+          lastMerged.end = Math.max(lastMerged.end, current.end);
+        } else {
+          merged.push(current);
+        }
+      }
+
+      // Sum clean isolated windows
+      let totalMinutes = 0;
+      merged.forEach(interval => {
+        totalMinutes += (interval.end - interval.start);
+      });
+      return totalMinutes;
     }
 
     function buildGroupedDashboard(selectedName, selectedDate) {
@@ -529,6 +545,9 @@
       let selectedLogsCount = 0, totalItemsProcessedCount = 0;
       let uniqueActiveMembers = new Set();
       const groupedData = {};
+
+      // Array to accumulate ALL matching logs across the whole selection scope for global calculations
+      let globalFilteredItems = [];
 
       rawDataHistory.forEach(item => {
         let normalizedDate = cleanAndParseDate(item.date);
@@ -541,20 +560,31 @@
           selectedLogsCount++;
           if (item.itemsProcessed && item.itemsProcessed !== "-") totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
           uniqueActiveMembers.add(item.name);
+          globalFilteredItems.push(item);
           
-          if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, totalMinutes: 0 };
+          if (!groupedData[normalizedDate]) {
+            groupedData[normalizedDate] = { hours: {}, itemsList: [] };
+          }
+          
           const hourLabel = getHourBlockLabel(item.timeWindow);
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
           groupedData[normalizedDate].hours[hourLabel].push(item);
-          groupedData[normalizedDate].totalMinutes += parseDurationToMinutes(item.duration);
+          
+          // Accumulate inside separate array list to run specific macro interval evaluation
+          groupedData[normalizedDate].itemsList.push(item);
         }
       });
 
+      // Update Top Status Cards (Global unique non-overlapping tracking totals context mapping)
+      // If filtering by a single person, it displays their unique hours. If viewing "All Members", it scales properly.
+      let globalUniqueMinutes = calculateNonOverlappingMinutes(globalFilteredItems);
       document.getElementById('statTodayLogs').textContent = selectedLogsCount;
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
-      document.getElementById('logsTitle').textContent = selectedDate === "ALL" ? "Total Logs (Filtered)" : "Logs on Selected Date";
-      document.getElementById('itemsTitle').textContent = selectedDate === "ALL" ? "Total Items (Filtered)" : "Items Processed on Date";
+
+      // Update titles dynamically to reflect accurate interval representation
+      document.getElementById('logsTitle').textContent = "Total Logs Selected";
+      document.getElementById('itemsTitle').textContent = "Total Items Processed";
 
       const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a));
       if (sortedDates.length === 0) {
@@ -566,6 +596,9 @@
         const dateObj = new Date(date + "T00:00:00");
         const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
         
+        // Calculate clean de-duplicated times explicitly for this date layer block
+        let dateUniqueMinutes = calculateNonOverlappingMinutes(dateGroup.itemsList);
+
         const dateGroupDiv = document.createElement('div'); 
         dateGroupDiv.className = 'date-group';
         
@@ -578,7 +611,7 @@
             <button class="expand-all-action-link" onclick="toggleAllHoursInDate(event, this)">Expand All</button>
           </div>
           <span class="date-duration-total">
-            Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
+            Total Unique Time: <strong>${formatMinutesToText(dateUniqueMinutes)}</strong>
             <span class="toggle-arrow">▼</span>
           </span>
         `;
