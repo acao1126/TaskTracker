@@ -19,7 +19,7 @@
       --error-color: #d32f2f;
     }
 
-    /* 2. Dark Mode Variables */
+    /* 2. Dark Mode Variables (Applies automatically based on OS/Device settings) */
     @media (prefers-color-scheme: dark) {
       :root {
         --bg-color: #121212;
@@ -59,7 +59,7 @@
     
     label { font-weight: bold; margin-bottom: 5px; }
     
-    select, input[type="date"], textarea, button { 
+    select, input, textarea, button { 
       padding: 10px; 
       font-size: 16px; 
       border-radius: 6px; 
@@ -69,7 +69,7 @@
       font-family: inherit;
     }
     
-    select:focus, input[type="date"]:focus, textarea:focus {
+    select:focus, input:focus, textarea:focus {
       outline: 2px solid var(--btn-bg);
     }
     
@@ -127,6 +127,11 @@
     <div id="durationDisplay" class="duration-display"></div>
 
     <div class="form-group">
+      <label for="itemsProcessed">Items Processed (Optional):</label>
+      <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 25 (leave blank if N/A)">
+    </div>
+
+    <div class="form-group">
       <label for="taskDetails">What did you accomplish?</label>
       <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
     </div>
@@ -136,10 +141,8 @@
 
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
-    const CACHE_KEY = "teamRosterData";
-    const CACHE_TIMEOUT = 60 * 60 * 1000; // 1 Hour cache window
 
-    // Sets today's date in local time
+    // Helper to calculate and set today's date in local time (YYYY-MM-DD format)
     function setDefaultDate() {
       const dateInput = document.getElementById('taskDate');
       const today = new Date();
@@ -148,19 +151,9 @@
       dateInput.value = localDate.toISOString().split('T')[0];
     }
 
-    // Safely parse strings like "08:15 AM" or "08:15AM" into minutes from midnight
+    // Helper to turn strings like "08:15 AM" into minutes from midnight
     function timeToMinutes(timeStr) {
-      if (!timeStr) return 0;
-      
-      // Normalize string (ensure uniform spacing for splitting)
-      let cleanStr = timeStr.trim().toUpperCase();
-      if (!cleanStr.includes(' ') && (cleanStr.includes('AM') || cleanStr.includes('PM'))) {
-        cleanStr = cleanStr.replace('AM', ' AM').replace('PM', ' PM');
-      }
-
-      const [time, modifier] = cleanStr.split(' ');
-      if (!time) return 0;
-
+      const [time, modifier] = timeStr.split(' ');
       let [hours, minutes] = time.split(':').map(Number);
       
       if (hours === 12) {
@@ -171,7 +164,7 @@
       return (hours * 60) + minutes;
     }
 
-    // Core duration processing calculation logic
+    // Live duration calculator and logic validator
     function calculateDuration() {
       const startVal = document.getElementById('startTime').value;
       const endVal = document.getElementById('endTime').value;
@@ -204,7 +197,7 @@
       }
     }
 
-    // Generates select choices from 08:15 AM to 05:30 PM
+    // Programmatically generates choices from 8:15 AM to 5:30 PM
     function generateTimeOptions() {
       const startSelect = document.getElementById('startTime');
       const endSelect = document.getElementById('endTime');
@@ -215,8 +208,7 @@
       endLimit.setHours(17, 30, 0, 0); 
 
       while (current <= endLimit) {
-        // Enforce localized structural matching 
-        let timeString = current.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        let timeString = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
         let optStart = document.createElement('option');
         optStart.value = timeString;
@@ -234,13 +226,15 @@
       if(endSelect.options.length > 4) endSelect.selectedIndex = 4; 
     }
 
-    // Helper to change option states safely
-    function populateNameDropdown(names) {
+    // JSONP CALLBACK: Activated when Google sends data back successfully
+    window.handleGoogleResponse = function(data) {
       const nameSelect = document.getElementById('name');
+      const submitBtn = document.getElementById('submitBtn');
+      
       nameSelect.innerHTML = '<option value="">-- Select Your Name --</option>';
       
-      if (names && names.length > 0) {
-        names.forEach(name => {
+      if (data.names && data.names.length > 0) {
+        data.names.forEach(name => {
           let opt = document.createElement('option');
           opt.value = name;
           opt.textContent = name;
@@ -250,56 +244,35 @@
         nameSelect.innerHTML = '<option value="">No names found in "Leads" sheet</option>';
       }
       
-      const submitBtn = document.getElementById('submitBtn');
       submitBtn.textContent = "Submit Entry";
-      calculateDuration();
-    }
-
-    // JSONP Callback pipeline
-    window.handleGoogleResponse = function(data) {
-      if (data && data.names && data.names.length > 0) {
-        populateNameDropdown(data.names);
-        
-        // Save to LocalStorage cache
-        const cacheObject = {
-          timestamp: new Date().getTime(),
-          names: data.names
-        };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheObject));
-      }
+      calculateDuration(); 
     };
 
-    // Main script initial data processor
+    // JSONP INJECTION: Fetches live names and breaks old browser cache blocks
     function loadTeamRoster() {
-      const cachedData = localStorage.getItem(CACHE_KEY);
-      const now = new Date().getTime();
-
-      // If cache exists, process immediately
-      if (cachedData) {
-        const parsedCache = JSON.parse(cachedData);
-        populateNameDropdown(parsedCache.names);
-        
-        // If cache is fresh, skip the network round-trip entirely
-        if (now - parsedCache.timestamp < CACHE_TIMEOUT) {
-          return; 
-        }
-      }
-
-      // Background Fetch / Initial Empty Cache state processing
+      const nameSelect = document.getElementById('name');
       const scriptElement = document.createElement('script');
-      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${now}`;
+      
+      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
       
       scriptElement.onerror = function() {
-        console.log("Fallback execution active.");
-        if (!localStorage.getItem(CACHE_KEY)) {
-          populateNameDropdown(["Person 1", "Person 2", "Person 3", "Person 4"]);
-        }
+        console.log("Fallback activated due to browser security settings.");
+        nameSelect.innerHTML = `
+          <option value="">-- Choose Roster --</option>
+          <option value="Person 1">Person 1</option>
+          <option value="Person 2">Person 2</option>
+          <option value="Person 3">Person 3</option>
+          <option value="Person 4">Person 4</option>
+        `;
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.textContent = "Submit Entry";
+        calculateDuration();
       };
       
       document.body.appendChild(scriptElement);
     }
 
-    // Form initialization step execution
+    // Initialize Form
     setDefaultDate();
     generateTimeOptions();
     loadTeamRoster();
@@ -308,7 +281,7 @@
     document.getElementById('endTime').addEventListener('change', calculateDuration);
     document.getElementById('name').addEventListener('change', calculateDuration);
 
-    // Submission management
+    // Form Task Submission Pipeline
     document.getElementById('trackerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
@@ -320,6 +293,7 @@
         date: document.getElementById('taskDate').value,
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
+        itemsProcessed: document.getElementById('itemsProcessed').value, // Included number count input item
         taskDetails: document.getElementById('taskDetails').value
       };
 
@@ -333,6 +307,7 @@
 
         alert("Task logged successfully!");
         document.getElementById('taskDetails').value = ""; 
+        document.getElementById('itemsProcessed').value = ""; // Clear out numerical field value
       } catch (error) {
         alert("Something went wrong. Please try again.");
       } finally {
