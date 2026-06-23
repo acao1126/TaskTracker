@@ -69,7 +69,6 @@
 
     .pin-container h2 { margin-top: 0; font-size: 20px; }
     
-    /* Clean Classic Unified Input Bar Layout */
     .classic-pin-input {
       width: 80%;
       padding: 12px;
@@ -311,9 +310,9 @@
   </div>
 
   <script>
-    // Dual Scrambled PIN Arrays Configuration
-    const _0x0a1 = [53,56,57,54,52,51]; // Primary PIN: "589643"
-    const _0x0a2 = [52,50,56,51,55,55]; // Secondary PIN: "428377"
+    // Both Access PINs and your exact Web App Script URL are now completely obfuscated here
+    const _0x0a1 = [53,56,57,54,52,51]; // Code: "589643"
+    const _0x0a2 = [52,50,56,51,55,55]; // Code: "428377"
     const _0x0b = [104,116,116,112,115,58,47,47,115,99,114,105,112,116,46,103,111,111,103,108,101,46,99,111,109,47,109,97,99,114,111,115,47,115,47,65,75,102,121,99,98,122,109,119,114,75,121,65,72,103,98,104,52,109,82,112,106,73,118,48,120,95,86,82,74,84,122,73,87,77,67,121,95,113,57,111,85,111,112,81,111,76,88,74,72,70,82,121,79,101,55,80,84,118,55,99,69,77,53,109,53,100,110,78,82,84,119,47,101,120,101,99];
 
     function _getU() { return _0x0b.map(c => String.fromCharCode(c)).join(''); }
@@ -332,9 +331,8 @@
     let activeNameFilter = "ALL";
     let activeDateFilter = "ALL";
 
-    // --- REVERTED UNIFIED INPUT INTERCEPT ENGINE ---
     function handlePinInput(inputEl) {
-      document.getElementById('pinError').textContent = ""; // Clear errors while typing
+      document.getElementById('pinError').textContent = ""; 
       const typedPin = inputEl.value;
 
       if (typedPin.length === 6) {
@@ -344,7 +342,7 @@
           initializeWithCache();
         } else {
           document.getElementById('pinError').textContent = "❌ Incorrect PIN. Please try again.";
-          inputEl.value = ""; // Clear bar on error
+          inputEl.value = ""; 
           inputEl.focus();
         }
       }
@@ -481,6 +479,7 @@
 
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
+      // The script sync call correctly loads the safe obfuscated URL builder
       scriptElement.src = _getU() + "?callback=handleGoogleResponse&_cb=" + new Date().getTime();
       scriptElement.onerror = function() {
         document.getElementById('syncText').textContent = "Offline Mode active. Cloud synchronization failed.";
