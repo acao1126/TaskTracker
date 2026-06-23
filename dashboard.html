@@ -14,6 +14,8 @@
       --accent-color: #0070f3;
       --error-color: #d32f2f;
       --group-header-bg: #eaeaea;
+      --hour-header-bg: #f0f4f8;
+      --hour-accent: #0070f3;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -26,6 +28,8 @@
         --accent-color: #3291ff;
         --error-color: #f44336;
         --group-header-bg: #2a2a2a;
+        --hour-header-bg: #1c2530;
+        --hour-accent: #3291ff;
       }
     }
 
@@ -33,7 +37,7 @@
       font-family: system-ui, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
-      max-width: 1200px; /* Widened slightly to give the square grid more breathing room */
+      max-width: 1200px;
       margin: 0 auto;
       padding: 30px 20px;
       transition: background-color 0.3s, color 0.3s;
@@ -148,7 +152,7 @@
       border-radius: 8px;
       font-weight: bold;
       font-size: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -157,7 +161,27 @@
 
     .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; }
 
-    /* --- THE NEW MODERN SQUARE GRID ARCHITECTURE --- */
+    /* --- HOURLY CONTAINER DESIGN --- */
+    .hour-block {
+      margin-bottom: 25px;
+      padding-left: 10px;
+      border-left: 2px dashed var(--border-color);
+    }
+
+    .hour-header {
+      background: var(--hour-header-bg);
+      color: var(--text-color);
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      border-radius: 20px;
+      margin-bottom: 15px;
+      border: 1px solid var(--border-color);
+    }
+
     .log-grid { 
       display: grid; 
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
@@ -172,8 +196,8 @@
       box-shadow: 0 3px 10px rgba(0,0,0,0.03);
       display: flex;
       flex-direction: column;
-      justify-content: space-between; /* Keeps content spaced out symmetrically in the square structure */
-      min-height: 180px; /* Enforces uniform visual density weight */
+      justify-content: space-between;
+      min-height: 160px;
     }
 
     .log-header {
@@ -193,7 +217,7 @@
       font-size: 14px; 
       line-height: 1.6; 
       margin: 0 0 15px 0; 
-      flex-grow: 1; /* Pushes content down elegantly */
+      flex-grow: 1;
       word-break: break-word;
     }
     
@@ -332,10 +356,9 @@
       document.querySelectorAll('.pin-box')[0].focus();
     });
 
-    // Helper: Extracts start hours to resolve ascending chronological time logic calculations
+    // Helper: Extracts the start time into raw integer minutes from midnight
     function getStartTimeInMinutes(timeWindowStr) {
       if (!timeWindowStr) return 0;
-      // Isolates the first segment before the dash spacer (e.g. "08:15 AM")
       const startTimePart = timeWindowStr.split(' - ')[0];
       const parts = startTimePart.split(' ');
       const time = parts[0];
@@ -348,6 +371,31 @@
         hours += 12;
       }
       return (hours * 60) + minutes;
+    }
+
+    // Helper: Determines which hourly block banner a task should fall under
+    function getHourBlockLabel(timeWindowStr) {
+      if (!timeWindowStr) return "Unknown Time";
+      const startTimePart = timeWindowStr.split(' - ')[0];
+      const parts = startTimePart.split(' ');
+      const time = parts[0];
+      const modifier = parts[1];
+      
+      let hours = parseInt(time.split(':')[0], 10);
+      
+      // Enforces clean standard top-of-the-hour blocks (e.g., "08:00 AM - 09:00 AM")
+      let startHourText = hours < 10 ? "0" + hours : hours;
+      let endHourText = (hours + 1) < 10 ? "0" + (hours + 1) : (hours + 1);
+      
+      if (hours === 11 && modifier === "AM") {
+        return "11:00 AM - 12:00 PM";
+      } else if (hours === 12 && modifier === "PM") {
+        return "12:00 PM - 01:00 PM";
+      } else if (hours === 12 && modifier === "AM") {
+        return "12:00 AM - 01:00 AM";
+      }
+      
+      return `${startHourText}:00 ${modifier} - ${endHourText}:00 ${modifier}`;
     }
 
     function parseDurationToMinutes(durationStr) {
@@ -423,6 +471,7 @@
       document.body.appendChild(scriptElement);
     }
 
+    // Core Processing Engine
     function buildGroupedDashboard(selectedName) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -444,10 +493,16 @@
         if (selectedName !== "ALL" && item.name !== selectedName) return;
 
         if (!groupedData[item.date]) {
-          groupedData[item.date] = { tasks: [], totalMinutes: 0 };
+          groupedData[item.date] = { hours: {}, totalMinutes: 0 };
         }
         
-        groupedData[item.date].tasks.push(item);
+        // Match item into its hour bucket identifier string
+        const hourLabel = getHourBlockLabel(item.timeWindow);
+        if (!groupedData[item.date].hours[hourLabel]) {
+          groupedData[item.date].hours[hourLabel] = [];
+        }
+        
+        groupedData[item.date].hours[hourLabel].push(item);
         groupedData[item.date].totalMinutes += parseDurationToMinutes(item.duration);
       });
 
@@ -455,7 +510,7 @@
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
 
-      const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a)); // Main list: Newest date grouping block first
+      const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a)); // Newest calendar day on top
 
       if (sortedDates.length === 0) {
         feedContainer.innerHTML = "<div class='status-loading'>No task logs match this team selection.</div>";
@@ -463,50 +518,72 @@
       }
 
       sortedDates.forEach(date => {
-        const group = groupedData[date];
+        const dateGroup = groupedData[date];
         const dateObj = new Date(date + "T00:00:00");
         const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
         const dateGroupDiv = document.createElement('div');
         dateGroupDiv.className = 'date-group';
 
+        // Outer Main Header (Date and Summed Hours)
         const headerDiv = document.createElement('div');
         headerDiv.className = 'date-header';
         headerDiv.innerHTML = `
           <span>📅 ${formattedDate}</span>
-          <span class="date-duration-total">Total Time: <strong>${formatMinutesToText(group.totalMinutes)}</strong></span>
+          <span class="date-duration-total">Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong></span>
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        // --- SUB-SORT ENGINE: EARLIEST TIME WINDOW FIRST ---
-        group.tasks.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
-
-        // Create the multi-column square grid block wrapper
-        const logGrid = document.createElement('div');
-        logGrid.className = 'log-grid';
-
-        group.tasks.forEach(item => {
-          let card = document.createElement('div');
-          card.className = 'log-card';
-          let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
-
-          card.innerHTML = `
-            <div>
-              <div class="log-header">
-                <span class="team-name">👤 ${item.name}</span>
-                <span class="task-time-tag">⏱️ ${item.timeWindow}</span>
-              </div>
-              <div class="task-desc">${item.details}</div>
-            </div>
-            <div class="log-footer">
-              <span>⏳ ${item.duration}</span>
-              ${itemsText ? `<span>${itemsText}</span>` : ''}
-            </div>
-          `;
-          logGrid.appendChild(card);
+        // Sort hour keys chronologically based on their first entries
+        const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => {
+          return getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow);
         });
 
-        dateGroupDiv.appendChild(logGrid);
+        // Loop through each Hour Block
+        sortedHours.forEach(hourLabel => {
+          const tasksInHour = dateGroup.hours[hourLabel];
+          
+          // Sort individual cards inside the hour block (Earliest first)
+          tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
+
+          const hourBlockDiv = document.createElement('div');
+          hourBlockDiv.className = 'hour-block';
+
+          // Inner sub-header for the hour block
+          const hourHeaderSpan = document.createElement('div');
+          hourHeaderSpan.className = 'hour-header';
+          hourHeaderSpan.textContent = `⏰ ${hourLabel}`;
+          hourBlockDiv.appendChild(hourHeaderSpan);
+
+          // Grid for cards in this hour block
+          const logGrid = document.createElement('div');
+          logGrid.className = 'log-grid';
+
+          tasksInHour.forEach(item => {
+            let card = document.createElement('div');
+            card.className = 'log-card';
+            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
+
+            card.innerHTML = `
+              <div>
+                <div class="log-header">
+                  <span class="team-name">👤 ${item.name}</span>
+                  <span class="task-time-tag">⏱️ ${item.timeWindow}</span>
+                </div>
+                <div class="task-desc">${item.details}</div>
+              </div>
+              <div class="log-footer">
+                <span>⏳ ${item.duration}</span>
+                ${itemsText ? `<span>${itemsText}</span>` : ''}
+              </div>
+            `;
+            logGrid.appendChild(card);
+          });
+
+          hourBlockDiv.appendChild(logGrid);
+          dateGroupDiv.appendChild(hourBlockDiv);
+        });
+
         feedContainer.appendChild(dateGroupDiv);
       });
     }
