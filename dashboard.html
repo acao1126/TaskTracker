@@ -229,10 +229,14 @@
         )].sort((a,b) => b.localeCompare(a));
         
         uniqueDates.forEach(date => {
-          const dateObj = new Date(date + "T00:00:00");
-          if (!isNaN(dateObj.getTime())) {
-            let opt = document.createElement('option'); opt.value = date; opt.textContent = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); dateSelect.appendChild(opt);
-          }
+          let label = date;
+          try {
+            const dateObj = new Date(date + "T00:00:00");
+            if (!isNaN(dateObj.getTime())) {
+              label = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+          } catch(err) {}
+          let opt = document.createElement('option'); opt.value = date; opt.textContent = label; dateSelect.appendChild(opt);
         });
       }
     }
@@ -367,7 +371,16 @@
 
       sortedDates.forEach(date => {
         const dateGroup = groupedData[date];
-        const dateObj = new Date(date + "T00:00:00");
+        
+        // SAFE FALLBACK DATE PARSING: Bypasses browser string format strict crashes completely
+        let displayDateText = date;
+        try {
+          const dateObj = new Date(date + "T00:00:00");
+          if (!isNaN(dateObj.getTime())) {
+            displayDateText = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          }
+        } catch(err) { console.error("Formatting skip applied for:", date); }
+
         let dateUniqueMinutes = calculateNonOverlappingMinutes(dateGroup.itemsList);
 
         const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
@@ -375,7 +388,7 @@
         headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
         headerDiv.innerHTML = `
           <div class="date-header-left">
-            <span>📅 ${dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span>📅 ${escapeTextHTML(displayDateText)}</span>
             <button class="expand-all-action-link" onclick="toggleAllHoursInDate(event, this)">Expand All</button>
           </div>
           <span class="date-duration-total">Unique Time: <strong>${formatMinutesToText(dateUniqueMinutes)}</strong><span class="toggle-arrow">▼</span></span>
@@ -402,7 +415,6 @@
             let cleanName = escapeTextHTML(item.name || 'Unknown');
             let cleanTime = escapeTextHTML(item.timeWindow || '00:00 - 00:00');
             
-            // SYNC BRIDGE: Fallback safely checks both data column mapping varieties
             let rawDetailsField = item.details || item.taskDetails || '-';
             let cleanDetails = escapeTextHTML(rawDetailsField);
             
