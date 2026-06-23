@@ -13,6 +13,7 @@
       --border-color: #e1e4e8;
       --accent-color: #0070f3;
       --error-color: #d32f2f;
+      --group-header-bg: #eaeaea;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -24,6 +25,7 @@
         --border-color: #333333;
         --accent-color: #3291ff;
         --error-color: #f44336;
+        --group-header-bg: #2a2a2a;
       }
     }
 
@@ -39,7 +41,7 @@
 
     h1, h2 { margin-bottom: 20px; }
 
-    /* PIN Lock Screen Overlay Overlay */
+    /* PIN Lock Screen Overlay */
     #lockScreen {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -96,11 +98,9 @@
     }
 
     /* Dashboard Hidden State Control */
-    #dashboardContent {
-      display: none; /* Stays hidden until correct PIN entry */
-    }
+    #dashboardContent { display: none; }
 
-    /* Metrics and Dashboard Layout Elements */
+    /* Metrics Row */
     .metrics-row {
       display: flex;
       gap: 20px;
@@ -121,11 +121,12 @@
     .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
 
+    /* Filter Controls */
     .filter-box {
       background: var(--card-bg);
       padding: 15px 20px;
       border-radius: 8px;
-      margin-bottom: 20px;
+      margin-bottom: 30px;
       border: 1px solid var(--border-color);
       display: flex;
       gap: 15px;
@@ -141,11 +142,36 @@
       color: var(--text-color);
     }
 
-    .log-container { display: flex; flex-direction: column; gap: 15px; }
+    /* Date Group Headers */
+    .date-group {
+      margin-bottom: 30px;
+    }
+
+    .date-header {
+      background: var(--group-header-bg);
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 4px solid var(--accent-color);
+    }
+
+    .date-duration-total {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Timeline Task Cards */
+    .log-container { display: flex; flex-direction: column; gap: 12px; }
 
     .log-card {
       background: var(--card-bg);
-      padding: 20px;
+      padding: 18px;
       border-radius: 10px;
       border: 1px solid var(--border-color);
       box-shadow: 0 2px 6px rgba(0,0,0,0.02);
@@ -162,7 +188,7 @@
       padding-bottom: 8px;
     }
 
-    .team-name { font-weight: bold; font-size: 16px; color: var(--accent-color); }
+    .team-name { font-weight: bold; font-size: 15px; color: var(--accent-color); }
     .task-time-tag { font-size: 13px; color: var(--text-muted); background: var(--bg-color); padding: 3px 8px; border-radius: 4px; }
     .task-desc { font-size: 15px; line-height: 1.5; margin: 5px 0; }
     
@@ -225,29 +251,24 @@
     </div>
 
     <div id="loadingStatus" class="status-loading">Syncing data with Google Sheets...</div>
-    <div id="logContainer" class="log-container"></div>
+    
+    <div id="dashboardFeed"></div>
   </div>
 
   <script>
-    // CHANGE THIS STRINGS VALUE VALUE VALUE TO YOUR CHOSEN 6-DIGIT SECURITY CODE
-    const DASHBOARD_PIN = "123456"; 
-    
+    const DASHBOARD_PIN = "123456"; // Change to your preferred code
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     let rawDataHistory = [];
 
-    // --- PIN BOX INTERACTION ENGINE ---
-    // Auto-focuses the next input box when typing
+    // PIN Input Handling Functions
     function moveFocus(current, nextIndex) {
       if (current.value.length === 1) {
         const boxes = document.querySelectorAll('.pin-box');
-        if (boxes[nextIndex]) {
-          boxes[nextIndex].focus();
-        }
-        checkPin(); // Run verification loop once full
+        if (boxes[nextIndex]) boxes[nextIndex].focus();
+        checkPin();
       }
     }
 
-    // Handles backspace key behaviors to leap backward safely
     function handleBackspace(current, event) {
       if (event.key === "Backspace" && current.value.length === 0) {
         const boxes = Array.from(document.querySelectorAll('.pin-box'));
@@ -259,7 +280,6 @@
       }
     }
 
-    // Compiles input values and matches against master key
     function checkPin() {
       const boxes = document.querySelectorAll('.pin-box');
       let typedPin = "";
@@ -267,26 +287,46 @@
 
       if (typedPin.length === 6) {
         if (typedPin === DASHBOARD_PIN) {
-          // Clear screens and initialize loading sequences
           document.getElementById('lockScreen').style.display = 'none';
           document.getElementById('dashboardContent').style.display = 'block';
-          loadDashboardData(); // Trigger data fetch ONLY after unlock
+          loadDashboardData();
         } else {
           document.getElementById('pinError').textContent = "❌ Incorrect PIN. Please try again.";
           boxes.forEach((box, idx) => {
             box.value = "";
-            if (idx === 0) box.focus(); // Snap cursor back to first input
+            if (idx === 0) box.focus();
           });
         }
       }
     }
 
-    // Automatically focuses the first PIN box when the page opens
     window.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.pin-box')[0].focus();
     });
 
-    // --- DASHBOARD DATA ENGINE ---
+    // Helper: Parses text duration fields into raw runtime minutes for aggregation
+    function parseDurationToMinutes(durationStr) {
+      if (!durationStr || durationStr === "0 mins") return 0;
+      let totalMinutes = 0;
+      const hourMatch = durationStr.match(/(\d+)\s*hr/);
+      const minMatch = durationStr.match(/(\d+)\s*min/);
+      if (hourMatch) totalMinutes += parseInt(hourMatch[1], 10) * 60;
+      if (minMatch) totalMinutes += parseInt(minMatch[1], 10);
+      return totalMinutes;
+    }
+
+    // Helper: Formats total minutes back into beautiful UI string text
+    function formatMinutesToText(totalMinutes) {
+      if (totalMinutes === 0) return "0 mins";
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      let output = [];
+      if (hours > 0) output.push(`${hours} hr${hours > 1 ? 's' : ''}`);
+      if (minutes > 0) output.push(`${minutes} mins`);
+      return output.join(" ");
+    }
+
+    // Data Pipeline Handshake
     window.handleGoogleResponse = function(data) {
       document.getElementById('loadingStatus').style.display = 'none';
       rawDataHistory = data.history || [];
@@ -301,62 +341,105 @@
         });
       }
 
-      renderDashboard(rawDataHistory);
+      buildGroupedDashboard("ALL");
     };
 
-    function renderDashboard(items) {
-      const logContainer = document.getElementById('logContainer');
-      logContainer.innerHTML = "";
+    // Core Processing Engine: Groups items dynamically and sums up time durations
+    function buildGroupedDashboard(selectedName) {
+      const feedContainer = document.getElementById('dashboardFeed');
+      feedContainer.innerHTML = "";
 
       let todayStr = new Date().toLocaleDateString('sv-SE'); 
       let logsTodayCount = 0;
       let totalItemsProcessedCount = 0;
       let uniqueActiveMembers = new Set();
 
-      items.forEach(item => {
+      // Step 1: Organize tasks by date key
+      const groupedData = {};
+
+      rawDataHistory.forEach(item => {
+        // High-level top card analytics counters (always based on raw inputs)
         if (item.date === todayStr) logsTodayCount++;
         if (item.itemsProcessed && item.itemsProcessed !== "-") {
           totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
         }
         if (item.name) uniqueActiveMembers.add(item.name);
 
-        let card = document.createElement('div');
-        card.className = 'log-card';
-        card.setAttribute('data-name', item.name);
+        // Filter enforcement check
+        if (selectedName !== "ALL" && item.name !== selectedName) return;
 
-        let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items Processed: <strong>${item.itemsProcessed}</strong>` : '';
-
-        card.innerHTML = `
-          <div class="log-header">
-            <span class="team-name">👤 ${item.name}</span>
-            <span class="task-time-tag">⏱️ ${item.timeWindow}</span>
-          </div>
-          <div class="task-desc">${item.details}</div>
-          <div class="log-footer">
-            <span>📅 Work Date: ${item.date}</span>
-            <span>⏳ Duration: ${item.duration}</span>
-            ${itemsText ? `<span>${itemsText}</span>` : ''}
-          </div>
-        `;
-        logContainer.appendChild(card);
+        if (!groupedData[item.date]) {
+          groupedData[item.date] = { tasks: [], totalMinutes: 0 };
+        }
+        
+        groupedData[item.date].tasks.push(item);
+        groupedData[item.date].totalMinutes += parseDurationToMinutes(item.duration);
       });
 
+      // Update the main top analytics block elements
       document.getElementById('statTodayLogs').textContent = logsTodayCount;
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
+
+      // Step 2: Render out grouped DOM nodes sequentially
+      const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a)); // Newest dates first
+
+      if (sortedDates.length === 0) {
+        feedContainer.innerHTML = "<div class='status-loading'>No task entries match the chosen filter constraints.</div>";
+        return;
+      }
+
+      sortedDates.forEach(date => {
+        const group = groupedData[date];
+        
+        // Format date string beautifully (e.g., "Jun 23, 2026")
+        const dateObj = new Date(date + "T00:00:00");
+        const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+        const dateGroupDiv = document.createElement('div');
+        dateGroupDiv.className = 'date-group';
+
+        // Header showing Date + Total Time Spent
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'date-header';
+        headerDiv.innerHTML = `
+          <span>📅 ${formattedDate}</span>
+          <span class="date-duration-total">Total Time Spent: <strong>${formatMinutesToText(group.totalMinutes)}</strong></span>
+        `;
+        dateGroupDiv.appendChild(headerDiv);
+
+        const logContainer = document.createElement('div');
+        logContainer.className = 'log-container';
+
+        // Add each inner task card
+        group.tasks.forEach(item => {
+          let card = document.createElement('div');
+          card.className = 'log-card';
+          let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items Processed: <strong>${item.itemsProcessed}</strong>` : '';
+
+          card.innerHTML = `
+            <div class="log-header">
+              <span class="team-name">👤 ${item.name}</span>
+              <span class="task-time-tag">⏱️ ${item.timeWindow}</span>
+            </div>
+            <div class="task-desc">${item.details}</div>
+            <div class="log-footer">
+              <span>⏳ Duration: ${item.duration}</span>
+              ${itemsText ? `<span>${itemsText}</span>` : ''}
+            </div>
+          `;
+          logContainer.appendChild(card);
+        });
+
+        dateGroupDiv.appendChild(logContainer);
+        feedContainer.appendChild(dateGroupDiv);
+      });
     }
 
+    // Interactive Trigger
     function applyFilters() {
       const selectedName = document.getElementById('filterName').value;
-      const cards = document.querySelectorAll('.log-card');
-      
-      cards.forEach(card => {
-        if (selectedName === "ALL" || card.getAttribute('data-name') === selectedName) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
-      });
+      buildGroupedDashboard(selectedName);
     }
 
     function loadDashboardData() {
