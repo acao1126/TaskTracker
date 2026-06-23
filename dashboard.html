@@ -316,7 +316,6 @@
       return totalMinutes;
     }
 
-    // Dynamic text escaping safety layout component helper
     function escapeTextHTML(str) {
       if (!str) return '';
       return str.toString()
@@ -400,10 +399,13 @@
           const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
-            // SAFE EXTRACTION INTERCEPTOR: Sanitizes variables to avoid breaking the DOM engine
             let cleanName = escapeTextHTML(item.name || 'Unknown');
             let cleanTime = escapeTextHTML(item.timeWindow || '00:00 - 00:00');
-            let cleanDetails = escapeTextHTML(item.details || '-');
+            
+            // SYNC BRIDGE: Fallback safely checks both data column mapping varieties
+            let rawDetailsField = item.details || item.taskDetails || '-';
+            let cleanDetails = escapeTextHTML(rawDetailsField);
+            
             let cleanDuration = escapeTextHTML(item.duration || '0 mins');
             let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(item.itemsProcessed)}</strong>` : '';
             
