@@ -147,9 +147,33 @@
       background-color: var(--border-color);
     }
 
+    .date-header-left {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    /* Clean minimalistic styling for the expand text toggle link */
+    .expand-all-action-link {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-color);
+      background: var(--card-bg);
+      padding: 4px 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      transition: all 0.2s;
+    }
+    .expand-all-action-link:hover {
+      background: var(--accent-color);
+      color: #ffffff;
+      border-color: var(--accent-color);
+    }
+
     .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 10px; }
 
-    /* Rotates arrow sideways when parent bar is collapsed */
     .toggle-arrow {
       font-size: 12px;
       transition: transform 0.2s ease;
@@ -190,7 +214,6 @@
       margin-top: 15px;
     }
 
-    /* Standard Utility to toggle visibility blocks */
     .is-hidden {
       display: none !important;
     }
@@ -236,7 +259,7 @@
     <div class="pin-container">
       <h2>Enter Security PIN</h2>
       <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Access restricted to authorized team members.</p>
-      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="••••••" oninput="handlePinInput(this)">
+      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="•••••" oninput="handlePinInput(this)">
       <div id="pinError"></div>
     </div>
   </div>
@@ -246,7 +269,7 @@
     <div class="metrics-row">
       <div class="metric-card"><h3 id="logsTitle">Total Logs Selected</h3><p id="statTodayLogs">-</p></div>
       <div class="metric-card"><h3 id="itemsTitle">Total Items Processed</h3><p id="statTotalItems">-</p></div>
-      <div class="metric-card">__Active Team Members__<p id="statActiveCount">-</p></div>
+      <div class="metric-card"><h3>Active Team Members</h3><p id="statActiveCount">-</p></div>
     </div>
 
     <h2>Activity Feed</h2>
@@ -462,6 +485,27 @@
       targetContent.classList.toggle('is-hidden');
     }
 
+    // --- NEW: MACRO DATES MASS ACCORDION CONTROLLER ---
+    function expandAllHoursInDate(event, linkEl) {
+      // Vital safeguard: Stops clicking the button from closing the parent Date Bar
+      event.stopPropagation(); 
+      
+      const parentDateGroup = linkEl.closest('.date-group');
+      const dateHeader = parentDateGroup.querySelector('.date-header');
+      const dateContent = parentDateGroup.querySelector('.date-content');
+      
+      // 1. Uncollapse the main parent Date block container row
+      dateHeader.classList.remove('collapsed');
+      dateContent.classList.remove('is-hidden');
+      
+      // 2. Query and open every single Hour child container loop inside this day
+      const hourHeaders = parentDateGroup.querySelectorAll('.hour-header');
+      const hourContents = parentDateGroup.querySelectorAll('.hour-content');
+      
+      hourHeaders.forEach(header => header.classList.remove('collapsed'));
+      hourContents.forEach(content => content.classList.remove('is-hidden'));
+    }
+
     function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -509,11 +553,13 @@
         dateGroupDiv.className = 'date-group';
         
         const headerDiv = document.createElement('div'); 
-        // INITIAL STATE: Added 'collapsed' class by default
         headerDiv.className = 'date-header collapsed';
         headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
         headerDiv.innerHTML = `
-          <span>📅 ${formattedDate}</span>
+          <div class="date-header-left">
+            <span>📅 ${formattedDate}</span>
+            <button class="expand-all-action-link" onclick="expandAllHoursInDate(event, this)">Expand All</button>
+          </div>
           <span class="date-duration-total">
             Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
             <span class="toggle-arrow">▼</span>
@@ -521,7 +567,6 @@
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        // INITIAL STATE: Added 'is-hidden' class to hide date blocks on launch
         const dateContentDiv = document.createElement('div');
         dateContentDiv.className = 'date-content is-hidden';
         
@@ -535,13 +580,11 @@
           hourBlockDiv.className = 'hour-block';
           
           const hourHeaderSpan = document.createElement('div'); 
-          // INITIAL STATE: Added 'collapsed' class by default
           hourHeaderSpan.className = 'hour-header collapsed'; 
           hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
           hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
           
-          // INITIAL STATE: Added 'is-hidden' class to hide card blocks on launch
           const hourContentDiv = document.createElement('div');
           hourContentDiv.className = 'hour-content is-hidden';
           
