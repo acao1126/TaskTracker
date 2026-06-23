@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Productivity Dashboard</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f8;
+      --card-bg: #ffffff;
+      --text-color: #333333;
+      --text-muted: #666666;
+      --border-color: #e1e4e8;
+      --accent-color: #0070f3;
+      --error-color: #d32f2f;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-color: #121212;
+        --card-bg: #1e1e1e;
+        --text-color: #f5f5f5;
+        --text-muted: #aaaaaa;
+        --border-color: #333333;
+        --accent-color: #3291ff;
+        --error-color: #f44336;
+      }
+    }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 30px 20px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    h1, h2 { margin-bottom: 20px; }
+
+    /* PIN Lock Screen Overlay Overlay */
+    #lockScreen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--bg-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .pin-container {
+      background: var(--card-bg);
+      padding: 35px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      border: 1px solid var(--border-color);
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+    }
+
+    .pin-container h2 { margin-top: 0; font-size: 20px; }
+    
+    .pin-input-wrapper {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 20px 0;
+    }
+
+    .pin-box {
+      width: 40px;
+      height: 45px;
+      font-size: 24px;
+      text-align: center;
+      border-radius: 8px;
+      border: 2px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-color);
+      font-weight: bold;
+    }
+
+    .pin-box:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+
+    #pinError {
+      color: var(--error-color);
+      font-size: 14px;
+      height: 18px;
+      margin-top: 5px;
+      font-weight: 500;
+    }
+
+    /* Dashboard Hidden State Control */
+    #dashboardContent {
+      display: none; /* Stays hidden until correct PIN entry */
+    }
+
+    /* Metrics and Dashboard Layout Elements */
+    .metrics-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      flex: 1;
+      min-width: 200px;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border: 1px solid var(--border-color);
+    }
+
+    .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
+
+    .filter-box {
+      background: var(--card-bg);
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .filter-box select {
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    .log-container { display: flex; flex-direction: column; gap: 15px; }
+
+    .log-card {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      border-bottom: 1px dashed var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    .team-name { font-weight: bold; font-size: 16px; color: var(--accent-color); }
+    .task-time-tag { font-size: 13px; color: var(--text-muted); background: var(--bg-color); padding: 3px 8px; border-radius: 4px; }
+    .task-desc { font-size: 15px; line-height: 1.5; margin: 5px 0; }
+    
+    .log-footer {
+      display: flex;
+      gap: 15px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .status-loading { text-align: center; font-size: 18px; margin-top: 5px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <div id="lockScreen">
+    <div class="pin-container">
+      <h2>Enter Security PIN</h2>
+      <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Access restricted to authorized team members.</p>
+      
+      <div class="pin-input-wrapper">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 1)" onkeydown="handleBackspace(this, event)">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 2)" onkeydown="handleBackspace(this, event)">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 3)" onkeydown="handleBackspace(this, event)">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 4)" onkeydown="handleBackspace(this, event)">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 5)" onkeydown="handleBackspace(this, event)">
+        <input type="password" class="pin-box" maxlength="1" oninput="moveFocus(this, 6)" onkeydown="handleBackspace(this, event)">
+      </div>
+      
+      <div id="pinError"></div>
+    </div>
+  </div>
+
+  <div id="dashboardContent">
+    <h1>Team Productivity Dashboard</h1>
+
+    <div class="metrics-row">
+      <div class="metric-card">
+        <h3>Total Logs Today</h3>
+        <p id="statTodayLogs">-</p>
+      </div>
+      <div class="metric-card">
+        <h3>Total Items Processed</h3>
+        <p id="statTotalItems">-</p>
+      </div>
+      <div class="metric-card">
+        <h3>Active Team Members</h3>
+        <p id="statActiveCount">-</p>
+      </div>
+    </div>
+
+    <h2>Activity Feed</h2>
+    
+    <div class="filter-box">
+      <label for="filterName">Filter by Member:</label>
+      <select id="filterName" onchange="applyFilters()">
+        <option value="ALL">All Team Members</option>
+      </select>
+    </div>
+
+    <div id="loadingStatus" class="status-loading">Syncing data with Google Sheets...</div>
+    <div id="logContainer" class="log-container"></div>
+  </div>
+
+  <script>
+    // CHANGE THIS STRINGS VALUE VALUE VALUE TO YOUR CHOSEN 6-DIGIT SECURITY CODE
+    const DASHBOARD_PIN = "123456"; 
+    
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
+    let rawDataHistory = [];
+
+    // --- PIN BOX INTERACTION ENGINE ---
+    // Auto-focuses the next input box when typing
+    function moveFocus(current, nextIndex) {
+      if (current.value.length === 1) {
+        const boxes = document.querySelectorAll('.pin-box');
+        if (boxes[nextIndex]) {
+          boxes[nextIndex].focus();
+        }
+        checkPin(); // Run verification loop once full
+      }
+    }
+
+    // Handles backspace key behaviors to leap backward safely
+    function handleBackspace(current, event) {
+      if (event.key === "Backspace" && current.value.length === 0) {
+        const boxes = Array.from(document.querySelectorAll('.pin-box'));
+        const index = boxes.indexOf(current);
+        if (index > 0) {
+          boxes[index - 1].focus();
+          boxes[index - 1].value = "";
+        }
+      }
+    }
+
+    // Compiles input values and matches against master key
+    function checkPin() {
+      const boxes = document.querySelectorAll('.pin-box');
+      let typedPin = "";
+      boxes.forEach(box => typedPin += box.value);
+
+      if (typedPin.length === 6) {
+        if (typedPin === DASHBOARD_PIN) {
+          // Clear screens and initialize loading sequences
+          document.getElementById('lockScreen').style.display = 'none';
+          document.getElementById('dashboardContent').style.display = 'block';
+          loadDashboardData(); // Trigger data fetch ONLY after unlock
+        } else {
+          document.getElementById('pinError').textContent = "❌ Incorrect PIN. Please try again.";
+          boxes.forEach((box, idx) => {
+            box.value = "";
+            if (idx === 0) box.focus(); // Snap cursor back to first input
+          });
+        }
+      }
+    }
+
+    // Automatically focuses the first PIN box when the page opens
+    window.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.pin-box')[0].focus();
+    });
+
+    // --- DASHBOARD DATA ENGINE ---
+    window.handleGoogleResponse = function(data) {
+      document.getElementById('loadingStatus').style.display = 'none';
+      rawDataHistory = data.history || [];
+      
+      const filterSelect = document.getElementById('filterName');
+      if (data.names) {
+        data.names.forEach(name => {
+          let opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          filterSelect.appendChild(opt);
+        });
+      }
+
+      renderDashboard(rawDataHistory);
+    };
+
+    function renderDashboard(items) {
+      const logContainer = document.getElementById('logContainer');
+      logContainer.innerHTML = "";
+
+      let todayStr = new Date().toLocaleDateString('sv-SE'); 
+      let logsTodayCount = 0;
+      let totalItemsProcessedCount = 0;
+      let uniqueActiveMembers = new Set();
+
+      items.forEach(item => {
+        if (item.date === todayStr) logsTodayCount++;
+        if (item.itemsProcessed && item.itemsProcessed !== "-") {
+          totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
+        }
+        if (item.name) uniqueActiveMembers.add(item.name);
+
+        let card = document.createElement('div');
+        card.className = 'log-card';
+        card.setAttribute('data-name', item.name);
+
+        let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items Processed: <strong>${item.itemsProcessed}</strong>` : '';
+
+        card.innerHTML = `
+          <div class="log-header">
+            <span class="team-name">👤 ${item.name}</span>
+            <span class="task-time-tag">⏱️ ${item.timeWindow}</span>
+          </div>
+          <div class="task-desc">${item.details}</div>
+          <div class="log-footer">
+            <span>📅 Work Date: ${item.date}</span>
+            <span>⏳ Duration: ${item.duration}</span>
+            ${itemsText ? `<span>${itemsText}</span>` : ''}
+          </div>
+        `;
+        logContainer.appendChild(card);
+      });
+
+      document.getElementById('statTodayLogs').textContent = logsTodayCount;
+      document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
+      document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
+    }
+
+    function applyFilters() {
+      const selectedName = document.getElementById('filterName').value;
+      const cards = document.querySelectorAll('.log-card');
+      
+      cards.forEach(card => {
+        if (selectedName === "ALL" || card.getAttribute('data-name') === selectedName) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function loadDashboardData() {
+      const scriptElement = document.createElement('script');
+      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
+      scriptElement.onerror = function() {
+        document.getElementById('loadingStatus').textContent = "Connection block occurred. Check permissions configuration.";
+      };
+      document.body.appendChild(scriptElement);
+    }
+  </script>
+</body>
+</html>
