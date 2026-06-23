@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Task Logger</title>
+  <title>Team Task Tracker</title>
   <style>
     :root {
       --bg-color: #f4f6f8;
@@ -12,7 +12,7 @@
       --text-muted: #666666;
       --border-color: #e1e4e8;
       --accent-color: #0070f3;
-      --accent-hover: #0051ba;
+      --accent-hover: #0051a8;
       --success-color: #22c55e;
     }
 
@@ -25,276 +25,347 @@
         --border-color: #333333;
         --accent-color: #3291ff;
         --accent-hover: #0070f3;
-        --success-color: #4ade80;
+        --success-color: #2ec27e;
       }
     }
 
     body {
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
-      max-width: 600px;
+      max-width: 540px;
       margin: 0 auto;
-      padding: 40px 20px;
+      padding: 20px;
       transition: background-color 0.3s, color 0.3s;
     }
 
     .form-container {
-      background: var(--card-bg);
+      background-color: var(--card-bg);
       padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border-radius: 16px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.04);
       border: 1px solid var(--border-color);
     }
 
-    h1 {
-      margin-top: 0;
-      margin-bottom: 25px;
-      font-size: 24px;
-      text-align: center;
-    }
+    h2 { margin-top: 0; margin-bottom: 24px; font-size: 22px; text-align: center; }
 
-    .form-group {
-      margin-bottom: 20px;
-    }
+    .form-group { margin-bottom: 22px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
 
-    label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-
-    select, input, textarea {
+    select, input[type="date"], input[type="number"], textarea {
       width: 100%;
-      padding: 10px 12px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-color);
+      color: var(--text-color);
       font-size: 15px;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent-color); }
+
+    textarea { resize: vertical; min-height: 90px; }
+
+    /* --- ADVANCED TIME SLIDER STYLING --- */
+    .slider-metadata {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      background: var(--bg-color);
+      padding: 8px 12px;
       border-radius: 6px;
       border: 1px solid var(--border-color);
-      background: var(--bg-color);
-      color: var(--text-color);
-      box-sizing: border-box;
     }
+    .slider-time-preview { font-weight: bold; color: var(--accent-color); font-size: 14px; }
+    .slider-duration-preview { font-weight: 700; font-size: 14px; background: var(--accent-color); color: #ffffff; padding: 2px 8px; border-radius: 12px; }
 
-    select:focus, input:focus, textarea:focus {
-      outline: none;
-      border-color: var(--accent-color);
+    .slider-track-container {
+      position: relative;
+      height: 40px;
+      margin-top: 10px;
     }
-
-    .time-row {
+    .slider-base-bar {
+      position: absolute;
+      top: 18px; left: 0; right: 0;
+      height: 6px;
+      background-color: var(--border-color);
+      border-radius: 3px;
+      z-index: 1;
+    }
+    .slider-active-range {
+      position: absolute;
+      top: 18px;
+      height: 6px;
+      background-color: var(--accent-color);
+      border-radius: 3px;
+      z-index: 2;
+    }
+    .slider-input-handle {
+      position: absolute;
+      width: 100%;
+      top: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      pointer-events: none;
+      margin: 0;
+      z-index: 3;
+    }
+    .slider-input-handle::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 24px; width: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent-color);
+      cursor: pointer;
+      pointer-events: auto;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .slider-input-handle::-moz-range-thumb {
+      height: 18px; width: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent-color);
+      cursor: pointer;
+      pointer-events: auto;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .slider-axis-labels {
       display: flex;
-      gap: 15px;
-    }
-
-    .time-row .form-group {
-      flex: 1;
-      margin-bottom: 0;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 100px;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 4px;
+      padding: 0 2px;
     }
 
     button {
       width: 100%;
-      padding: 12px;
+      padding: 14px;
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
       font-size: 16px;
       font-weight: bold;
-      color: #ffffff;
-      background-color: var(--accent-color);
-      border: none;
-      border-radius: 6px;
       cursor: pointer;
+      transition: background-color 0.2s;
     }
+    button:hover { background-color: var(--accent-hover); }
+    button:disabled { background-color: var(--text-muted); cursor: not-allowed; }
 
-    button:hover {
-      background-color: var(--accent-hover);
-    }
-
-    button:disabled {
-      background-color: var(--text-muted);
-      cursor: not-allowed;
-    }
-
-    .status-msg {
+    #statusMessage {
       margin-top: 20px;
       padding: 12px;
-      border-radius: 6px;
+      border-radius: 8px;
       text-align: center;
-      font-size: 14px;
       font-weight: 500;
+      font-size: 14px;
       display: none;
     }
-
-    .status-msg.success {
-      background: rgba(34, 197, 94, 0.1);
-      color: var(--success-color);
-      border: 1px solid var(--success-color);
-    }
-
-    .status-msg.error {
-      background: rgba(211, 47, 47, 0.1);
-      color: #f44336;
-      border: 1px solid #f44336;
-    }
+    .status-success { background-color: rgba(34,197,94,0.15); color: var(--success-color); border: 1px solid var(--success-color); }
+    .status-error { background-color: rgba(211,47,47,0.15); color: #d32f2f; border: 1px solid #d32f2f; }
   </style>
 </head>
 <body>
 
   <div class="form-container">
-    <h1>Log Today's Task</h1>
-    
-    <form id="taskForm" onsubmit="submitTaskForm(event)">
+    <h2>🚀 Team Task Logger</h2>
+    <form id="taskForm" onsubmit="submitTaskLog(event)">
       
-      <div id="formFieldsBlock">
-        <div class="form-group">
-          <label for="formName">Team Member Name:</label>
-          <select id="formName" required>
-            <option value="" disabled selected>Loading team list...</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="formDate">Date:</label>
-          <input type="date" id="formDate" required>
-        </div>
-
-        <div class="time-row form-group">
-          <div class="form-group">
-            <label for="formStartTime">Start Time:</label>
-            <select id="formStartTime" required></select>
-          </div>
-          <div class="form-group">
-            <label for="formEndTime">End Time:</label>
-            <select id="formEndTime" required></select>
-          </div>
-        </div>
-
-        <div style="margin-bottom: 20px;"></div>
-
-        <div class="form-group">
-          <label for="formDetails">Task / Activity Details:</label>
-          <textarea id="formDetails" placeholder="Describe the work completed during this block..." required></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="formItems">Number of Items Processed:</label>
-          <input type="number" id="formItems" min="0" placeholder="e.g. 25">
-        </div>
-
-        <button type="submit" id="submitBtn">Submit Task Log</button>
+      <div class="form-group">
+        <label for="teamMember">Team Member</label>
+        <select id="teamMember" required>
+          <option value="" disabled selected>Select your name...</option>
+          <option value="Alex">Alex</option>
+          <option value="Jordan">Jordan</option>
+          <option value="Taylor">Taylor</option>
+          <option value="Morgan">Morgan</option>
+        </select>
       </div>
+
+      <div class="form-group">
+        <label for="taskDate">Date</label>
+        <input type="date" id="taskDate" required>
+      </div>
+
+      <!-- TIME WINDOW COMPONENT (SLIDER INTERACTION) -->
+      <div class="form-group">
+        <label>Time Worked Window</label>
+        
+        <div class="slider-metadata">
+          <div class="slider-time-preview" id="timePreviewDisplay">08:00 AM - 09:00 AM</div>
+          <div class="slider-duration-preview" id="durationPreviewDisplay">1 hr</div>
+        </div>
+
+        <div class="slider-track-container">
+          <div class="slider-base-bar"></div>
+          <div class="slider-active-range" id="sliderHighlightRange"></div>
+          
+          <!-- Double handle slider ranges mapping 6:00 AM (24) to 10:00 PM (88) in 15m intervals -->
+          <input type="range" id="sliderStartHandle" class="slider-input-handle" min="24" max="88" step="1" value="32" oninput="syncTimeSlider()">
+          <input type="range" id="sliderEndHandle" class="slider-input-handle" min="24" max="88" step="1" value="36" oninput="syncTimeSlider()">
+        </div>
+        
+        <div class="slider-axis-labels">
+          <span>6 AM</span>
+          <span>12 PM</span>
+          <span>4 PM</span>
+          <span>10 PM</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="taskDetails">Task Details / Descriptions</label>
+        <textarea id="taskDetails" placeholder="What task items did you complete during this window?" required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="itemsProcessed">Number of Items Processed (Optional)</label>
+        <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 15">
+      </div>
+
+      <button type="submit" id="submitBtn">Submit Task Log</button>
     </form>
 
-    <div id="statusAlert" class="status-msg"></div>
+    <div id="statusMessage"></div>
   </div>
 
   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
-    const BACKEND_TOKEN = "589643";
+    const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
+    const MASTER_TOKEN = "589643"; // Invisible token signature key
 
+    // Auto-populate today's calendar date configuration on launch
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
-      document.getElementById('formDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      generateTimeDropdownOptions();
-      
-      // Initialize layout with device cache first to ensure instant rendering
-      initializeRosterWithCache();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
+      syncTimeSlider(); // Setup slider elements
     });
 
-    function generateTimeDropdownOptions() {
-      const startSelect = document.getElementById('formStartTime');
-      const endSelect = document.getElementById('formEndTime');
-      const periods = ['AM', 'PM'];
-      for (let p = 0; p < periods.length; p++) {
-        for (let h = 0; h < 12; h++) {
-          const hour = h === 0 ? 12 : h; const displayHour = hour < 10 ? '0' + hour : hour;
-          for (let m = 0; m < 60; m += 15) {
-            const minutes = m === 0 ? '00' : m; const timeString = `${displayHour}:${minutes} ${periods[p]}`;
-            let oS = document.createElement('option'); oS.value = timeString; oS.textContent = timeString; startSelect.appendChild(oS);
-            let oE = document.createElement('option'); oE.value = timeString; oE.textContent = timeString; endSelect.appendChild(oE);
-          }
+    // --- TIME SLIDER SLIDE & VALUE TRANSLATION MATH ---
+    function convertTicksToTimeText(ticks) {
+      let totalMinutes = ticks * 15;
+      let hours = Math.floor(totalMinutes / 60);
+      let minutes = totalMinutes % 60;
+      let ampm = hours >= 12 ? 'PM' : 'AM';
+      
+      let displayHours = hours % 12;
+      if (displayHours === 0) displayHours = 12;
+      
+      let displayMinutes = minutes < 10 ? '0' + minutes : minutes;
+      let displayHoursStr = displayHours < 10 ? '0' + displayHours : displayHours;
+      
+      return `${displayHoursStr}:${displayMinutes} ${ampm}`;
+    }
+
+    function syncTimeSlider() {
+      const startEl = document.getElementById('sliderStartHandle');
+      const endEl = document.getElementById('sliderEndHandle');
+      const highlightRange = document.getElementById('sliderHighlightRange');
+      
+      let startVal = parseInt(startEl.value, 10);
+      let endVal = parseInt(endEl.value, 10);
+      
+      // Enforce overlap crossing boundaries restriction rules dynamically
+      if (startVal >= endVal) {
+        if (event && event.target.id === 'sliderStartHandle') {
+          endVal = startVal + 1;
+          endEl.value = endVal;
+        } else {
+          startVal = endVal - 1;
+          startEl.value = startVal;
         }
       }
-      startSelect.value = "08:00 AM"; endSelect.value = "09:00 AM";
+
+      // Calculate slider layout width percentages
+      const minLimit = parseInt(startEl.min, 10);
+      const maxLimit = parseInt(startEl.max, 10);
+      const totalRange = maxLimit - minLimit;
+      
+      const leftPercent = ((startVal - minLimit) / totalRange) * 100;
+      const widthPercent = ((endVal - startVal) / totalRange) * 100;
+      
+      highlightRange.style.left = leftPercent + '%';
+      highlightRange.style.width = widthPercent + '%';
+
+      // Update text preview elements
+      const startTimeText = convertTicksToTimeText(startVal);
+      const endTimeText = convertTicksToTimeText(endVal);
+      document.getElementById('timePreviewDisplay').textContent = `${startTimeText} - ${endTimeText}`;
+      
+      // Compute accurate duration summary texts
+      let diffMinutes = (endVal - startVal) * 15;
+      let durationHours = Math.floor(diffMinutes / 60);
+      let durationMins = diffMinutes % 60;
+      
+      let durationOutput = [];
+      if (durationHours > 0) durationOutput.push(`${durationHours} hr${durationHours > 1 ? 's' : ''}`);
+      if (durationMins > 0) durationOutput.push(`${durationMins} min${durationMins > 1 ? 's' : ''}`);
+      document.getElementById('durationPreviewDisplay').textContent = durationOutput.join(' ');
     }
 
-    // --- SMART ROSTER CACHE INITIALIZATION ---
-    function initializeRosterWithCache() {
-      const cachedNames = localStorage.getItem('logger_roster_names_cache');
+    // --- FORM SUBMISSION GATEWAY ---
+    function submitTaskLog(e) {
+      e.preventDefault();
       
-      if (cachedNames) {
-        // Instant render from memory
-        renderNameDropdown(JSON.parse(cachedNames));
-      }
-      
-      // Silently fetch fresh updates from Google cloud behind the scenes
-      fetchFreshRosterData();
-    }
-
-    function renderNameDropdown(namesArray) {
-      const nameSelect = document.getElementById('formName');
-      const currentSelection = nameSelect.value;
-      
-      nameSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
-      namesArray.forEach(name => {
-        if(name) {
-          let opt = document.createElement('option');
-          opt.value = name;
-          opt.textContent = name;
-          nameSelect.appendChild(opt);
-        }
-      });
-      
-      // Maintain selected index choice if the user had already clicked a name
-      if (currentSelection) nameSelect.value = currentNameSelection;
-    }
-
-    window.handleGoogleResponse = function(data) {
-      if (data && data.names) {
-        // Save fresh names to local device memory
-        localStorage.setItem('logger_roster_names_cache', JSON.stringify(data.names));
-        
-        // Update selection UI smoothly
-        renderNameDropdown(data.names);
-      }
-    };
-
-    function fetchFreshRosterData() {
-      const scriptElement = document.createElement('script');
-      scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + BACKEND_TOKEN + "&_cb=" + new Date().getTime();
-      document.body.appendChild(scriptElement);
-    }
-
-    function submitTaskForm(event) {
-      event.preventDefault();
       const submitBtn = document.getElementById('submitBtn');
-      const alertBox = document.getElementById('statusAlert');
-      submitBtn.disabled = true; submitBtn.textContent = "Saving log down to Google Sheets...";
-      alertBox.style.display = "none";
+      const statusBox = document.getElementById('statusMessage');
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving Log to Sheets...";
+      statusBox.style.display = "none";
 
-      const payload = {
-        token: BACKEND_TOKEN,
-        name: document.getElementById('formName').value,
-        date: document.getElementById('formDate').value,
-        startTime: document.getElementById('formStartTime').value,
-        endTime: document.getElementById('formEndTime').value,
-        taskDetails: document.getElementById('formDetails').value,
-        itemsProcessed: document.getElementById('formItems').value
+      // Formulate target runtime parameters from slider strings
+      const calculatedTimeRange = document.getElementById('timePreviewDisplay').textContent;
+      const calculatedDuration = document.getElementById('durationPreviewDisplay').textContent;
+      const rawProcessedInput = document.getElementById('itemsProcessed').value;
+
+      const payloadData = {
+        token: MASTER_TOKEN,
+        name: document.getElementById('teamMember').value,
+        date: document.getElementById('taskDate').value,
+        timeWindow: calculatedTimeRange,
+        duration: calculatedDuration,
+        details: document.getElementById('taskDetails').value,
+        itemsProcessed: rawProcessedInput ? parseInt(rawProcessedInput, 10) : "-"
       };
 
-      fetch(SCRIPT_URL, {
-        method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+      // Ship data package straight to App Script via fetch JSON POST network pipe
+      fetch(DEPLOY_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadData)
       })
       .then(() => {
-        alertBox.className = "status-msg success"; alertBox.textContent = "✔ Success! Task log entry safely saved."; alertBox.style.display = "block";
-        document.getElementById('formDetails').value = ""; document.getElementById('formItems').value = "";
-        submitBtn.disabled = false; submitBtn.textContent = "Submit Task Log";
+        statusBox.className = "status-success";
+        statusBox.innerHTML = "🎉 Task logged successfully in real-time!";
+        statusBox.style.display = "block";
+        
+        // Reset descriptions & counts inputs safely, keeping date and names locked for convenience
+        document.getElementById('taskDetails').value = "";
+        document.getElementById('itemsProcessed').value = "";
+        
+        // Reset slider to default positions (8 AM to 9 AM)
+        document.getElementById('sliderStartHandle').value = "32";
+        document.getElementById('sliderEndHandle').value = "36";
+        syncTimeSlider();
       })
       .catch(err => {
-        alertBox.className = "status-msg error"; alertBox.textContent = "❌ Connection failed: " + err.toString(); alertBox.style.display = "block";
-        submitBtn.disabled = false; submitBtn.textContent = "Submit Task Log";
+        statusBox.className = "status-error";
+        statusBox.innerHTML = "❌ Network connection dropped. Please try again.";
+        statusBox.style.display = "block";
+        console.error("Transmission fault details:", err);
+      })
+      .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit Task Log";
       });
     }
   </script>
