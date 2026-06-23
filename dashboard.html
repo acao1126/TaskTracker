@@ -30,9 +30,16 @@
     .metric-card { background: var(--card-bg); flex: 1; min-width: 200px; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border-color); }
     .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
+    
+    /* Updated Filter Box layout to neatly fit the text search field */
     .filter-box { background: var(--card-bg); padding: 15px 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid var(--border-color); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
     .filter-group { display: flex; align-items: center; gap: 10px; }
     .filter-box select { padding: 8px 12px; font-size: 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); }
+    
+    /* Search Input field styling */
+    .search-input { padding: 8px 12px; font-size: 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); min-width: 240px; flex-grow: 1; }
+    .search-input:focus { outline: none; border-color: var(--accent-color); }
+
     .date-group { margin-bottom: 15px; }
     .date-header { background: var(--group-header-bg); padding: 12px 18px; border-radius: 8px; font-weight: bold; font-size: 16px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent-color); cursor: pointer; user-select: none; transition: background-color 0.2s; }
     .date-header:hover { background-color: var(--border-color); }
@@ -84,6 +91,10 @@
     <div class="filter-box">
       <div class="filter-group"><label for="filterName">Filter by Member:</label><select id="filterName" onchange="applyFilters()"><option value="ALL">All Team Members</option></select></div>
       <div class="filter-group"><label for="filterDate">Filter by Date:</label><select id="filterDate" onchange="applyFilters()"><option value="ALL">All Dates</option></select></div>
+      
+      <div class="filter-group" style="flex-grow: 1;">
+        <input type="text" id="dashboardSearch" class="search-input" placeholder="🔍 Search tasks details, descriptions, logs..." oninput="applyFilters()">
+      </div>
     </div>
 
     <div class="sync-status"><span id="syncDot" class="dot"></span><span id="syncText">Loading locally cached metrics...</span></div>
@@ -111,6 +122,7 @@
     let rawDataHistory = [];
     let activeNameFilter = "ALL";
     let activeDateFilter = "ALL";
+    let activeSearchQuery = "";
 
     function handlePinInput(inputEl) {
       document.getElementById('pinError').textContent = ""; 
@@ -202,7 +214,6 @@
       return totalMinutes;
     }
 
-    // Standard linear textual reconstruction summation format loop
     function formatMinutesToText(totalMinutes) {
       if (totalMinutes === 0) return "0 mins";
       const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60;
@@ -218,7 +229,7 @@
       if (cachedData && cachedNames) {
         rawDataHistory = JSON.parse(cachedData);
         populateDropdowns(JSON.parse(cachedNames), rawDataHistory);
-        buildGroupedDashboard(activeNameFilter, activeDateFilter);
+        buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
         document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
       } else {
         document.getElementById('syncText').textContent = "No cache found. Downloading master sheet databases...";
@@ -268,7 +279,7 @@
       localStorage.setItem('tracker_dashboard_cache', JSON.stringify(rawDataHistory));
       localStorage.setItem('tracker_names_cache', JSON.stringify(incomingNames));
       populateDropdowns(incomingNames, rawDataHistory);
-      buildGroupedDashboard(activeNameFilter, activeDateFilter);
+      buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
       document.getElementById('syncDot').className = "dot synced";
       document.getElementById('syncText').textContent = "Synced with live Google Sheet database (Real-Time).";
     };
@@ -320,12 +331,14 @@
       }
     }
 
-    function buildGroupedDashboard(selectedName, selectedDate) {
+    function buildGroupedDashboard(selectedName, selectedDate, searchQuery) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
       let selectedLogsCount = 0, totalItemsProcessedCount = 0;
       let uniqueActiveMembers = new Set();
       const groupedData = {};
+
+      const lowerQuery = searchQuery.trim().toLowerCase();
 
       rawDataHistory.forEach(item => {
         let normalizedDate = cleanAndParseDate(item.date);
@@ -334,7 +347,11 @@
         const matchesName = (selectedName === "ALL" || item.name === selectedName);
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
         
-        if (matchesName && matchesDate) {
+        // Text Match Rule: Checks details, descriptions, or name columns
+        var logDetailsText = (item.details || item.taskDetails || "").toString().toLowerCase();
+        const matchesSearch = (lowerQuery === "" || logDetailsText.includes(lowerQuery) || item.name.toLowerCase().includes(lowerQuery));
+
+        if (matchesName && matchesDate && matchesSearch) {
           selectedLogsCount++;
           if (item.itemsProcessed && item.itemsProcessed !== "-") totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
           uniqueActiveMembers.add(item.name);
@@ -344,7 +361,6 @@
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
           groupedData[normalizedDate].hours[hourLabel].push(item);
           
-          // Reverted back to simple direct duration calculation additions directly
           groupedData[normalizedDate].totalMinutes += parseDurationToMinutes(item.duration);
         }
       });
@@ -408,7 +424,7 @@
           tasksInHour.forEach(item => {
             let card = document.createElement('div'); card.className = 'log-card';
             let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
-            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
+            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details || item.taskDetails || '-'}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
             logGrid.appendChild(card);
           });
           
@@ -425,7 +441,9 @@
     function applyFilters() {
       activeNameFilter = document.getElementById('filterName').value;
       activeDateFilter = document.getElementById('filterDate').value;
-      buildGroupedDashboard(activeNameFilter, activeDateFilter);
+      activeSearchQuery = document.getElementById('dashboardSearch').value;
+      
+      buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
     }
   </script>
 </body>
