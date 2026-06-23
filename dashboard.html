@@ -53,7 +53,7 @@
     .log-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px; gap: 8px; }
     .team-name { font-weight: bold; font-size: 15px; color: var(--accent-color); }
     .task-time-tag { font-size: 12px; color: var(--text-muted); background: var(--bg-color); padding: 4px 8px; border-radius: 4px; white-space: nowrap; }
-    .task-desc { font-size: 14px; line-height: 1.6; margin: 0 0 15px 0; flex-grow: 1; word-break: break-word; }
+    .task-desc { font-size: 14px; line-height: 1.6; margin: 0 0 15px 0; flex-grow: 1; word-break: break-word; white-space: pre-wrap; }
     .log-footer { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 10px; }
     .sync-status { font-size: 13px; color: var(--text-muted); margin-bottom: 15px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
     .dot { height: 8px; width: 8px; background-color: #eab308; border-radius: 50%; display: inline-block; }
@@ -316,6 +316,17 @@
       return totalMinutes;
     }
 
+    // Dynamic text escaping safety layout component helper
+    function escapeTextHTML(str) {
+      if (!str) return '';
+      return str.toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
     function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -382,16 +393,35 @@
           const hourBlockDiv = document.createElement('div'); hourBlockDiv.className = 'hour-block';
           const hourHeaderSpan = document.createElement('div'); hourHeaderSpan.className = 'hour-header collapsed'; 
           hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
-          hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
+          hourHeaderSpan.innerHTML = `⏰ ${escapeTextHTML(hourLabel)} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
           
           const hourContentDiv = document.createElement('div'); hourContentDiv.className = 'hour-content is-hidden';
           const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
-            let card = document.createElement('div'); card.className = 'log-card';
-            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
-            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
+            // SAFE EXTRACTION INTERCEPTOR: Sanitizes variables to avoid breaking the DOM engine
+            let cleanName = escapeTextHTML(item.name || 'Unknown');
+            let cleanTime = escapeTextHTML(item.timeWindow || '00:00 - 00:00');
+            let cleanDetails = escapeTextHTML(item.details || '-');
+            let cleanDuration = escapeTextHTML(item.duration || '0 mins');
+            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(item.itemsProcessed)}</strong>` : '';
+            
+            let card = document.createElement('div'); 
+            card.className = 'log-card';
+            card.innerHTML = `
+              <div>
+                <div class="log-header">
+                  <span class="team-name">👤 ${cleanName}</span>
+                  <span class="task-time-tag">⏱️ ${cleanTime}</span>
+                </div>
+                <div class="task-desc">${cleanDetails}</div>
+              </div>
+              <div class="log-footer">
+                <span>⏳ ${cleanDuration}</span>
+                ${itemsText ? `<span>${itemsText}</span>` : ''}
+              </div>
+            `;
             logGrid.appendChild(card);
           });
           hourContentDiv.appendChild(logGrid); hourBlockDiv.appendChild(hourContentDiv); dateContentDiv.appendChild(hourBlockDiv);
