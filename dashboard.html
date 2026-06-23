@@ -330,7 +330,6 @@
 
     function _getU() { return _0x0b.map(c => String.fromCharCode(c)).join(''); }
     
-    // Validates typed string against both configuration indexes
     function _vP(pStr) { 
       if(pStr.length !== 6) return false; 
       let match1 = true;
@@ -636,7 +635,6 @@
           dateGroupDiv.appendChild(hourBlockDiv);
         });
 
-        dateGroupDiv.appendChild(logGrid);
         feedContainer.appendChild(dateGroupDiv);
       });
     }
