@@ -127,13 +127,13 @@
     <div id="durationDisplay" class="duration-display"></div>
 
     <div class="form-group">
-      <label for="itemsProcessed">Items Processed (Optional):</label>
-      <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 25 (leave blank if N/A)">
+      <label for="taskDetails">What did you accomplish?</label>
+      <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
     </div>
 
     <div class="form-group">
-      <label for="taskDetails">What did you accomplish?</label>
-      <textarea id="taskDetails" placeholder="Briefly describe your tasks..." required></textarea>
+      <label for="itemsProcessed">Items Processed (Optional):</label>
+      <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 25 (leave blank if N/A)">
     </div>
 
     <button type="submit" id="submitBtn" disabled>Loading Form...</button>
@@ -293,7 +293,7 @@
         date: document.getElementById('taskDate').value,
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
-        itemsProcessed: document.getElementById('itemsProcessed').value, // Included number count input item
+        itemsProcessed: document.getElementById('itemsProcessed').value, 
         taskDetails: document.getElementById('taskDetails').value
       };
 
@@ -307,7 +307,7 @@
 
         alert("Task logged successfully!");
         document.getElementById('taskDetails').value = ""; 
-        document.getElementById('itemsProcessed').value = ""; // Clear out numerical field value
+        document.getElementById('itemsProcessed').value = ""; 
       } catch (error) {
         alert("Something went wrong. Please try again.");
       } finally {
