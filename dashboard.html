@@ -45,7 +45,6 @@
 
     h1, h2 { margin-bottom: 20px; }
 
-    /* PIN Lock Screen Overlay */
     #lockScreen {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -101,7 +100,6 @@
       font-weight: 500;
     }
 
-    /* Dashboard Content State */
     #dashboardContent { display: none; }
 
     .metrics-row {
@@ -124,7 +122,6 @@
     .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
 
-    /* Clean Dual Filter Control Layout Row */
     .filter-box {
       background: var(--card-bg);
       padding: 15px 20px;
@@ -283,11 +280,11 @@
 
     <div class="metrics-row">
       <div class="metric-card">
-        <h3>Total Logs Today</h3>
+        <h3 id="logsTitle">Total Logs Selected</h3>
         <p id="statTodayLogs">-</p>
       </div>
       <div class="metric-card">
-        <h3>Total Items Processed</h3>
+        <h3 id="itemsTitle">Total Items Processed</h3>
         <p id="statTotalItems">-</p>
       </div>
       <div class="metric-card">
@@ -323,9 +320,13 @@
   </div>
 
   <script>
-    const DASHBOARD_PIN = "123456"; 
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
-    
+    // Scrambled Configuration Arrays
+    const _0x0a = [53,56,57,54,52,51];
+    const _0x0b = [104,116,116,112,115,58,47,47,115,99,114,105,112,116,46,103,111,111,103,108,101,46,99,111,109,47,109,97,99,114,111,115,47,115,47,65,75,102,121,99,98,122,109,119,114,75,121,65,72,103,98,104,52,109,82,112,106,73,118,48,120,95,86,82,74,84,122,73,87,77,67,121,95,113,57,111,85,111,112,81,111,76,88,74,72,70,82,121,79,101,55,80,84,118,55,99,69,77,53,109,53,100,110,78,82,84,119,47,101,120,101,99];
+
+    function _getU() { return _0x0b.map(c => String.fromCharCode(c)).join(''); }
+    function _vP(pStr) { if(pStr.length !== 6) return false; for(let i=0; i<6; i++) { if(pStr.charCodeAt(i) !== _0x0a[i]) return false; } return true; }
+
     let rawDataHistory = [];
     let activeNameFilter = "ALL";
     let activeDateFilter = "ALL";
@@ -355,7 +356,7 @@
       boxes.forEach(box => typedPin += box.value);
 
       if (typedPin.length === 6) {
-        if (typedPin === DASHBOARD_PIN) {
+        if (_vP(typedPin)) {
           document.getElementById('lockScreen').style.display = 'none';
           document.getElementById('dashboardContent').style.display = 'block';
           initializeWithCache();
@@ -464,7 +465,6 @@
       const currentDateSelection = dateSelect.value;
       dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
       
-      // Filter out invalid/empty date tags before generating options
       const uniqueDates = [...new Set(historyData
         .map(item => item.date)
         .filter(d => d && d !== "Invalid Date" && d !== "undefined" && d.includes('-'))
@@ -501,7 +501,7 @@
 
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
-      scriptElement.src = `${SCRIPT_URL}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
+      scriptElement.src = `${_getU()}?callback=handleGoogleResponse&_cb=${new Date().getTime()}`;
       scriptElement.onerror = function() {
         document.getElementById('syncText').textContent = "Offline Mode active. Cloud synchronization failed.";
       };
@@ -512,46 +512,47 @@
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
 
-      let todayStr = new Date().toLocaleDateString('sv-SE'); 
-      let logsTodayCount = 0;
+      let selectedLogsCount = 0;
       let totalItemsProcessedCount = 0;
       let uniqueActiveMembers = new Set();
 
       const groupedData = {};
 
       rawDataHistory.forEach(item => {
-        // --- DATA SANITIZATION PROTECTION GUARD ---
-        // Instantly rejects empty rows, blank dates, and formatting glitches
         if (!item || !item.name || !item.date || item.date === "Invalid Date" || item.date === "undefined" || !item.timeWindow) {
           return; 
         }
 
-        if (item.date === todayStr) logsTodayCount++;
-        if (item.itemsProcessed && item.itemsProcessed !== "-") {
-          totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
-        }
-        uniqueActiveMembers.add(item.name);
+        const matchesName = (selectedName === "ALL" || item.name === selectedName);
+        const matchesDate = (selectedDate === "ALL" || item.date === selectedDate);
 
-        // Core filters evaluation
-        if (selectedName !== "ALL" && item.name !== selectedName) return;
-        if (selectedDate !== "ALL" && item.date !== selectedDate) return;
+        if (matchesName && matchesDate) {
+          selectedLogsCount++;
+          if (item.itemsProcessed && item.itemsProcessed !== "-") {
+            totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
+          }
+          uniqueActiveMembers.add(item.name);
 
-        if (!groupedData[item.date]) {
-          groupedData[item.date] = { hours: {}, totalMinutes: 0 };
+          if (!groupedData[item.date]) {
+            groupedData[item.date] = { hours: {}, totalMinutes: 0 };
+          }
+          
+          const hourLabel = getHourBlockLabel(item.timeWindow);
+          if (!groupedData[item.date].hours[hourLabel]) {
+            groupedData[item.date].hours[hourLabel] = [];
+          }
+          
+          groupedData[item.date].hours[hourLabel].push(item);
+          groupedData[item.date].totalMinutes += parseDurationToMinutes(item.duration);
         }
-        
-        const hourLabel = getHourBlockLabel(item.timeWindow);
-        if (!groupedData[item.date].hours[hourLabel]) {
-          groupedData[item.date].hours[hourLabel] = [];
-        }
-        
-        groupedData[item.date].hours[hourLabel].push(item);
-        groupedData[item.date].totalMinutes += parseDurationToMinutes(item.duration);
       });
 
-      document.getElementById('statTodayLogs').textContent = logsTodayCount;
+      document.getElementById('statTodayLogs').textContent = selectedLogsCount;
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
+
+      document.getElementById('logsTitle').textContent = selectedDate === "ALL" ? "Total Logs (Filtered)" : "Logs on Selected Date";
+      document.getElementById('itemsTitle').textContent = selectedDate === "ALL" ? "Total Items (Filtered)" : "Items Processed on Date";
 
       const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a));
 
