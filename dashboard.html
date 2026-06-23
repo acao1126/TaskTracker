@@ -374,13 +374,16 @@
     });
 
     function getStartTimeInMinutes(timeWindowStr) {
-      if (!timeWindowStr) return 0;
+      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
       const startTimePart = timeWindowStr.split(' - ')[0];
       const parts = startTimePart.split(' ');
+      if (parts.length < 2) return 0;
       const time = parts[0];
       const modifier = parts[1];
       
       let [hours, minutes] = time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 0;
+      
       if (hours === 12) {
         hours = (modifier === 'AM') ? 0 : 12;
       } else if (modifier === 'PM') {
@@ -390,13 +393,15 @@
     }
 
     function getHourBlockLabel(timeWindowStr) {
-      if (!timeWindowStr) return "Unknown Time";
+      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return "Unknown Time";
       const startTimePart = timeWindowStr.split(' - ')[0];
       const parts = startTimePart.split(' ');
+      if (parts.length < 2) return "Unknown Time";
       const time = parts[0];
       const modifier = parts[1];
       
       let hours = parseInt(time.split(':')[0], 10);
+      if (isNaN(hours)) return "Unknown Time";
       
       let startHourText = hours < 10 ? "0" + hours : hours;
       let endHourText = (hours + 1) < 10 ? "0" + (hours + 1) : (hours + 1);
@@ -443,33 +448,37 @@
       fetchFreshCloudData();
     }
 
-    // Populates both dropdown select groups dynamically based on available dataset logs
     function populateDropdowns(namesArray, historyData) {
-      // 1. Populate Roster Dropdown
       const nameSelect = document.getElementById('filterName');
       const currentNameSelection = nameSelect.value;
       nameSelect.innerHTML = '<option value="ALL">All Team Members</option>';
       namesArray.forEach(name => {
-        let opt = document.createElement('option');
-        opt.value = name; opt.textContent = name; nameSelect.appendChild(opt);
+        if(name) {
+          let opt = document.createElement('option');
+          opt.value = name; opt.textContent = name; nameSelect.appendChild(opt);
+        }
       });
       if(currentNameSelection) nameSelect.value = currentNameSelection;
 
-      // 2. Extrapolate and Populate Unique Dates Dropdown (Sorted newest first)
       const dateSelect = document.getElementById('filterDate');
       const currentDateSelection = dateSelect.value;
       dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
       
-      const uniqueDates = [...new Set(historyData.map(item => item.date))].sort((a,b) => b.localeCompare(a));
+      // Filter out invalid/empty date tags before generating options
+      const uniqueDates = [...new Set(historyData
+        .map(item => item.date)
+        .filter(d => d && d !== "Invalid Date" && d !== "undefined" && d.includes('-'))
+      )].sort((a,b) => b.localeCompare(a));
       
       uniqueDates.forEach(date => {
         const dateObj = new Date(date + "T00:00:00");
-        const formattedLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-        
-        let opt = document.createElement('option');
-        opt.value = date;
-        opt.textContent = formattedLabel;
-        dateSelect.appendChild(opt);
+        if (!isNaN(dateObj.getTime())) {
+          const formattedLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          let opt = document.createElement('option');
+          opt.value = date;
+          opt.textContent = formattedLabel;
+          dateSelect.appendChild(opt);
+        }
       });
       if(currentDateSelection) dateSelect.value = currentDateSelection;
     }
@@ -499,7 +508,6 @@
       document.body.appendChild(scriptElement);
     }
 
-    // Core Dual-Filtering Dashboard Engine
     function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -512,14 +520,19 @@
       const groupedData = {};
 
       rawDataHistory.forEach(item => {
-        // Core metrics totals are calculated across the board
+        // --- DATA SANITIZATION PROTECTION GUARD ---
+        // Instantly rejects empty rows, blank dates, and formatting glitches
+        if (!item || !item.name || !item.date || item.date === "Invalid Date" || item.date === "undefined" || !item.timeWindow) {
+          return; 
+        }
+
         if (item.date === todayStr) logsTodayCount++;
         if (item.itemsProcessed && item.itemsProcessed !== "-") {
           totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
         }
-        if (item.name) uniqueActiveMembers.add(item.name);
+        uniqueActiveMembers.add(item.name);
 
-        // --- MATURING FILTER EVALUATION CONDITIONS ---
+        // Core filters evaluation
         if (selectedName !== "ALL" && item.name !== selectedName) return;
         if (selectedDate !== "ALL" && item.date !== selectedDate) return;
 
