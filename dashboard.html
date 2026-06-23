@@ -45,6 +45,7 @@
 
     h1, h2 { margin-bottom: 20px; }
 
+    /* PIN Lock Screen Overlay */
     #lockScreen {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -200,7 +201,7 @@
     <div class="pin-container">
       <h2>Enter Security PIN</h2>
       <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Access restricted to authorized team members.</p>
-      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="•••••" oninput="handlePinInput(this)">
+      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="••••••" oninput="handlePinInput(this)">
       <div id="pinError"></div>
     </div>
   </div>
@@ -224,10 +225,8 @@
   </div>
 
   <script>
-    // 1. Direct Target Script URL Deployment Link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
 
-    // 2. Both Access PIN Arrays (Fully Obfuscated)
     const _0x0a1 = [53,56,57,54,52,51]; // Code: "589643"
     const _0x0a2 = [52,50,56,51,55,55]; // Code: "428377"
 
@@ -266,7 +265,6 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      // Auto-unlock if token is already locally cached on device
       if(activeToken && _vP(activeToken)) {
         document.getElementById('lockScreen').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
@@ -275,6 +273,42 @@
         document.getElementById('classicPinInput').focus();
       }
     });
+
+    // --- NEW ROBUST DATE NORMALIZATION ENGINE ---
+    // Cleans up structural variations from Google Sheets (ISO, Slashes, Timestamps)
+    function cleanAndParseDate(dateStr) {
+      if (!dateStr || dateStr === "undefined") return null;
+      
+      // If it's already full standard ISO format (YYYY-MM-DD), leave it be
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      
+      // If it contains a full timestamp T section or spaces, truncate it to just the date
+      let pureDatePart = dateStr.split('T')[0].split(' ')[0];
+      
+      // Handle slashes (e.g. MM/DD/YYYY or YYYY/MM/DD)
+      if (pureDatePart.includes('/')) {
+        let parts = pureDatePart.split('/');
+        // If it starts with a 4-digit year (YYYY/MM/DD)
+        if (parts[0].length === 4) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+        // If it looks like standard US structure (MM/DD/YYYY)
+        if (parts[2] && parts[2].length === 4) {
+          return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        }
+      }
+      
+      // Fallback check: Let the browser try to parse it safely
+      let dObj = new Date(dateStr);
+      if (!isNaN(dObj.getTime())) {
+        let y = dObj.getFullYear();
+        let m = String(dObj.getMonth() + 1).padStart(2, '0');
+        let d = String(dObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      
+      return null;
+    }
 
     function getStartTimeInMinutes(timeWindowStr) {
       if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
@@ -350,7 +384,13 @@
       const dateSelect = document.getElementById('filterDate');
       const currentDateSelection = dateSelect.value;
       dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
-      const uniqueDates = [...new Set(historyData.map(item => item.date).filter(d => d && d !== "Invalid Date" && d.includes('-')))].sort((a,b) => b.localeCompare(a));
+      
+      // Map and clean dates to prevent dropdown pollution
+      const uniqueDates = [...new Set(historyData
+        .map(item => cleanAndParseDate(item.date))
+        .filter(d => d !== null)
+      )].sort((a,b) => b.localeCompare(a));
+      
       uniqueDates.forEach(date => {
         const dateObj = new Date(date + "T00:00:00");
         if (!isNaN(dateObj.getTime())) {
@@ -362,7 +402,6 @@
     }
 
     window.handleGoogleResponse = function(data) {
-      // Guard: Check if cloud rejected token request and sent empty dataset
       if(data.secured && data.names.length === 0) {
         document.getElementById('syncText').textContent = "⛔ Access Revoked by Google Cloud Security Rule.";
         document.getElementById('syncDot').style.backgroundColor = "#ef4444";
@@ -383,7 +422,6 @@
 
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
-      // SECURED CONNECTION PIPELINE: Attaching validation key token inside background network execution loop
       scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + activeToken + "&_cb=" + new Date().getTime();
       scriptElement.onerror = function() {
         document.getElementById('syncText').textContent = "Offline Mode active. Cloud synchronization failed.";
@@ -399,18 +437,24 @@
       const groupedData = {};
 
       rawDataHistory.forEach(item => {
-        if (!item || !item.name || !item.date || item.date === "Invalid Date" || !item.timeWindow) return;
+        // Enforce the standard normalization parser clean rule up front
+        let normalizedDate = cleanAndParseDate(item.date);
+        
+        if (!item || !item.name || !normalizedDate || !item.timeWindow) return;
+        
         const matchesName = (selectedName === "ALL" || item.name === selectedName);
-        const matchesDate = (selectedDate === "ALL" || item.date === selectedDate);
+        const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
+        
         if (matchesName && matchesDate) {
           selectedLogsCount++;
           if (item.itemsProcessed && item.itemsProcessed !== "-") totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
           uniqueActiveMembers.add(item.name);
-          if (!groupedData[item.date]) groupedData[item.date] = { hours: {}, totalMinutes: 0 };
+          
+          if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, totalMinutes: 0 };
           const hourLabel = getHourBlockLabel(item.timeWindow);
-          if (!groupedData[item.date].hours[hourLabel]) groupedData[item.date].hours[hourLabel] = [];
-          groupedData[item.date].hours[hourLabel].push(item);
-          groupedData[item.date].totalMinutes += parseDurationToMinutes(item.duration);
+          if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
+          groupedData[normalizedDate].hours[hourLabel].push(item);
+          groupedData[normalizedDate].totalMinutes += parseDurationToMinutes(item.duration);
         }
       });
 
