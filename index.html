@@ -179,7 +179,7 @@
         </div>
 
         <div class="form-group">
-          <label for="formItems">Items Processed (Optional):</label>
+          <label for="formItems">Number of Items Processed:</label>
           <input type="number" id="formItems" min="0" placeholder="e.g. 25">
         </div>
 
@@ -191,17 +191,16 @@
   </div>
 
   <script>
-    // 1. Direct Target Script URL Deployment Link
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
-
-    // 2. Automated Token Security Parameter (Uses your master key behind the scenes)
     const BACKEND_TOKEN = "589643";
 
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       document.getElementById('formDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       generateTimeDropdownOptions();
-      loadRosterDatabase();
+      
+      // Initialize layout with device cache first to ensure instant rendering
+      initializeRosterWithCache();
     });
 
     function generateTimeDropdownOptions() {
@@ -221,16 +220,48 @@
       startSelect.value = "08:00 AM"; endSelect.value = "09:00 AM";
     }
 
-    function loadRosterDatabase() {
-      window.handleGoogleResponse = function(data) {
-        const nameSelect = document.getElementById('formName');
-        nameSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
-        if (data && data.names) {
-          data.names.forEach(name => {
-            let opt = document.createElement('option'); opt.value = name; opt.textContent = name; nameSelect.appendChild(opt);
-          });
+    // --- SMART ROSTER CACHE INITIALIZATION ---
+    function initializeRosterWithCache() {
+      const cachedNames = localStorage.getItem('logger_roster_names_cache');
+      
+      if (cachedNames) {
+        // Instant render from memory
+        renderNameDropdown(JSON.parse(cachedNames));
+      }
+      
+      // Silently fetch fresh updates from Google cloud behind the scenes
+      fetchFreshRosterData();
+    }
+
+    function renderNameDropdown(namesArray) {
+      const nameSelect = document.getElementById('formName');
+      const currentSelection = nameSelect.value;
+      
+      nameSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+      namesArray.forEach(name => {
+        if(name) {
+          let opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          nameSelect.appendChild(opt);
         }
-      };
+      });
+      
+      // Maintain selected index choice if the user had already clicked a name
+      if (currentSelection) nameSelect.value = currentNameSelection;
+    }
+
+    window.handleGoogleResponse = function(data) {
+      if (data && data.names) {
+        // Save fresh names to local device memory
+        localStorage.setItem('logger_roster_names_cache', JSON.stringify(data.names));
+        
+        // Update selection UI smoothly
+        renderNameDropdown(data.names);
+      }
+    };
+
+    function fetchFreshRosterData() {
       const scriptElement = document.createElement('script');
       scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + BACKEND_TOKEN + "&_cb=" + new Date().getTime();
       document.body.appendChild(scriptElement);
@@ -244,7 +275,7 @@
       alertBox.style.display = "none";
 
       const payload = {
-        token: BACKEND_TOKEN, // Passes the lock key automatically so Sheets accepts the write request
+        token: BACKEND_TOKEN,
         name: document.getElementById('formName').value,
         date: document.getElementById('formDate').value,
         startTime: document.getElementById('formStartTime').value,
