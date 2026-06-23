@@ -127,37 +127,78 @@
       color: var(--text-color);
     }
 
-    .date-group { margin-bottom: 40px; }
+    .date-group { margin-bottom: 20px; }
 
+    /* Collapsible Date Header Bar styling */
     .date-header {
       background: var(--group-header-bg);
       padding: 12px 18px;
       border-radius: 8px;
       font-weight: bold;
       font-size: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-left: 4px solid var(--accent-color);
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+    .date-header:hover {
+      background-color: var(--border-color);
     }
 
-    .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+    .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 10px; }
 
-    .hour-block { margin-bottom: 25px; padding-left: 10px; border-left: 2px dashed var(--border-color); }
+    /* Animated Accordion Carat Arrows */
+    .toggle-arrow {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+    .collapsed .toggle-arrow {
+      transform: rotate(-90deg);
+    }
 
+    /* Target Wrapper for Date Children Content blocks */
+    .date-content {
+      padding: 5px 0 15px 0;
+    }
+
+    .hour-block { margin-bottom: 15px; padding-left: 10px; border-left: 2px dashed var(--border-color); }
+
+    /* Collapsible Hour Bar Block Component Header design */
     .hour-header {
       background: var(--hour-header-bg);
       color: var(--text-color);
-      padding: 6px 12px;
+      padding: 6px 14px;
       font-size: 13px;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       border-radius: 20px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
       border: 1px solid var(--border-color);
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+    .hour-header:hover {
+      background-color: var(--group-header-bg);
+    }
+
+    /* Content Area under an hour selection block */
+    .hour-content {
+      margin-top: 5px;
+    }
+
+    /* Core utilities to hide hidden state fields smoothly */
+    .is-hidden {
+      display: none !important;
     }
 
     .log-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
@@ -274,31 +315,19 @@
       }
     });
 
-    // --- NEW ROBUST DATE NORMALIZATION ENGINE ---
-    // Cleans up structural variations from Google Sheets (ISO, Slashes, Timestamps)
     function cleanAndParseDate(dateStr) {
       if (!dateStr || dateStr === "undefined") return null;
-      
-      // If it's already full standard ISO format (YYYY-MM-DD), leave it be
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-      
-      // If it contains a full timestamp T section or spaces, truncate it to just the date
       let pureDatePart = dateStr.split('T')[0].split(' ')[0];
-      
-      // Handle slashes (e.g. MM/DD/YYYY or YYYY/MM/DD)
       if (pureDatePart.includes('/')) {
         let parts = pureDatePart.split('/');
-        // If it starts with a 4-digit year (YYYY/MM/DD)
         if (parts[0].length === 4) {
           return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
         }
-        // If it looks like standard US structure (MM/DD/YYYY)
         if (parts[2] && parts[2].length === 4) {
           return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
         }
       }
-      
-      // Fallback check: Let the browser try to parse it safely
       let dObj = new Date(dateStr);
       if (!isNaN(dObj.getTime())) {
         let y = dObj.getFullYear();
@@ -306,7 +335,6 @@
         let d = String(dObj.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
       }
-      
       return null;
     }
 
@@ -385,7 +413,6 @@
       const currentDateSelection = dateSelect.value;
       dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
       
-      // Map and clean dates to prevent dropdown pollution
       const uniqueDates = [...new Set(historyData
         .map(item => cleanAndParseDate(item.date))
         .filter(d => d !== null)
@@ -429,6 +456,20 @@
       document.body.appendChild(scriptElement);
     }
 
+    // --- ACCORDION INTERACTION CONTROLLERS ---
+    function toggleDateGroup(headerEl) {
+      headerEl.classList.toggle('collapsed');
+      const targetContent = headerEl.nextElementSibling;
+      targetContent.classList.toggle('is-hidden');
+    }
+
+    function toggleHourBlock(headerEl) {
+      const targetArrow = headerEl.querySelector('.toggle-arrow');
+      headerEl.classList.toggle('collapsed');
+      const targetContent = headerEl.nextElementSibling;
+      targetContent.classList.toggle('is-hidden');
+    }
+
     function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -437,9 +478,7 @@
       const groupedData = {};
 
       rawDataHistory.forEach(item => {
-        // Enforce the standard normalization parser clean rule up front
         let normalizedDate = cleanAndParseDate(item.date);
-        
         if (!item || !item.name || !normalizedDate || !item.timeWindow) return;
         
         const matchesName = (selectedName === "ALL" || item.name === selectedName);
@@ -469,23 +508,53 @@
         feedContainer.innerHTML = "<div class='status-loading'>No task logs match your chosen query filters.</div>"; return;
       }
 
-      sortedDates.forEach(date => {
+      sortedDates.forEach((date, dateIdx) => {
         const dateGroup = groupedData[date];
         const dateObj = new Date(date + "T00:00:00");
         const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-        const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
-        const headerDiv = document.createElement('div'); headerDiv.className = 'date-header';
-        headerDiv.innerHTML = `<span>📅 ${formattedDate}</span><span class="date-duration-total">Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong></span>`;
+        
+        const dateGroupDiv = document.createElement('div'); 
+        dateGroupDiv.className = 'date-group';
+        
+        // Date Header: Built to execute toggleDateGroup on tap/click
+        const headerDiv = document.createElement('div'); 
+        headerDiv.className = 'date-header';
+        headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
+        headerDiv.innerHTML = `
+          <span>📅 ${formattedDate}</span>
+          <span class="date-duration-total">
+            Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
+            <span class="toggle-arrow">▼</span>
+          </span>
+        `;
         dateGroupDiv.appendChild(headerDiv);
 
+        // Date Content Block container wrapper
+        const dateContentDiv = document.createElement('div');
+        dateContentDiv.className = 'date-content';
+        
         const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow));
-        sortedHours.forEach(hourLabel => {
+        
+        sortedHours.forEach((hourLabel, hourIdx) => {
           const tasksInHour = dateGroup.hours[hourLabel];
           tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
-          const hourBlockDiv = document.createElement('div'); hourBlockDiv.className = 'hour-block';
-          const hourHeaderSpan = document.createElement('div'); hourHeaderSpan.className = 'hour-header'; hourHeaderSpan.textContent = `⏰ ${hourLabel}`;
+          
+          const hourBlockDiv = document.createElement('div'); 
+          hourBlockDiv.className = 'hour-block';
+          
+          // Hour Sub-Header: Built to execute toggleHourBlock on tap/click
+          const hourHeaderSpan = document.createElement('div'); 
+          hourHeaderSpan.className = 'hour-header'; 
+          hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
+          hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
-          const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
+          
+          // Hour Content Wrapper (Holds the entry log card block grids)
+          const hourContentDiv = document.createElement('div');
+          hourContentDiv.className = 'hour-content';
+          
+          const logGrid = document.createElement('div'); 
+          logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
             let card = document.createElement('div'); card.className = 'log-card';
@@ -493,8 +562,13 @@
             card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
             logGrid.appendChild(card);
           });
-          hourBlockDiv.appendChild(logGrid); dateGroupDiv.appendChild(hourBlockDiv);
+          
+          hourContentDiv.appendChild(logGrid);
+          hourBlockDiv.appendChild(hourContentDiv);
+          dateContentDiv.appendChild(hourBlockDiv);
         });
+        
+        dateGroupDiv.appendChild(dateContentDiv);
         feedContainer.appendChild(dateGroupDiv);
       });
     }
