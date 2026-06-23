@@ -178,7 +178,7 @@
       <div class="form-group">
         <label for="teamMember">Team Member</label>
         <select id="teamMember" required>
-          <option value="" disabled selected>Loading active roster from Leads tab...</option>
+          <option value="" disabled selected>Loading...</option>
         </select>
       </div>
 
@@ -188,7 +188,7 @@
       </div>
 
       <div class="form-group">
-        <label>Time Worked Window</label>
+        <label>Time Window</label>
         
         <div class="slider-metadata">
           <div class="slider-time-preview" id="timePreviewDisplay">08:00 AM - 09:00 AM</div>
@@ -217,7 +217,7 @@
       </div>
 
       <div class="form-group">
-        <label for="itemsProcessed">Number of Items Processed (Optional)</label>
+        <label for="itemsProcessed">Number of Items Processed</label>
         <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 15">
       </div>
 
@@ -231,7 +231,6 @@
     const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     const MASTER_TOKEN = "589643"; 
 
-    // Auto-initialize calendar date and kick off live dynamic roster pull on launch
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       const yyyy = today.getFullYear();
@@ -243,14 +242,12 @@
       fetchLiveRosterFromLeads();
     });
 
-    // Invisible live pull from Apps Script via JSONP
     function fetchLiveRosterFromLeads() {
       const scriptElement = document.createElement('script');
       scriptElement.src = DEPLOY_URL + "?callback=handleRosterLoad&token=" + MASTER_TOKEN + "&_cb=" + new Date().getTime();
       document.body.appendChild(scriptElement);
     }
 
-    // Process the names array returned from the Google Sheet
     window.handleRosterLoad = function(data) {
       const memberSelect = document.getElementById('teamMember');
       memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
