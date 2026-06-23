@@ -67,7 +67,6 @@
 
     textarea { resize: vertical; min-height: 90px; }
 
-    /* --- ADVANCED TIME SLIDER STYLING --- */
     .slider-metadata {
       display: flex;
       justify-content: space-between;
@@ -179,11 +178,7 @@
       <div class="form-group">
         <label for="teamMember">Team Member</label>
         <select id="teamMember" required>
-          <option value="" disabled selected>Select your name...</option>
-          <option value="Your Name">Your Name</option>
-          <option value="Teammate 1">Teammate 1</option>
-          <option value="Teammate 2">Teammate 2</option>
-          <option value="Teammate 3">Teammate 3</option>
+          <option value="" disabled selected>Loading active roster from Leads tab...</option>
         </select>
       </div>
 
@@ -192,7 +187,6 @@
         <input type="date" id="taskDate" required>
       </div>
 
-      <!-- TIME WINDOW COMPONENT (SLIDER INTERACTION) -->
       <div class="form-group">
         <label>Time Worked Window</label>
         
@@ -205,7 +199,6 @@
           <div class="slider-base-bar"></div>
           <div class="slider-active-range" id="sliderHighlightRange"></div>
           
-          <!-- Double handle slider ranges mapping 6:00 AM (24) to 10:00 PM (88) in 15m intervals -->
           <input type="range" id="sliderStartHandle" class="slider-input-handle" min="24" max="88" step="1" value="32" oninput="syncTimeSlider()">
           <input type="range" id="sliderEndHandle" class="slider-input-handle" min="24" max="88" step="1" value="36" oninput="syncTimeSlider()">
         </div>
@@ -236,31 +229,55 @@
 
   <script>
     const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
-    const MASTER_TOKEN = "589643"; // Invisible token signature key
+    const MASTER_TOKEN = "589643"; 
 
-    // Auto-populate today's calendar date configuration on launch
+    // Auto-initialize calendar date and kick off live dynamic roster pull on launch
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
       document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
-      syncTimeSlider(); // Setup slider elements
+      syncTimeSlider();
+      
+      fetchLiveRosterFromLeads();
     });
 
-    // --- TIME SLIDER SLIDE & VALUE TRANSLATION MATH ---
+    // Invisible live pull from Apps Script via JSONP
+    function fetchLiveRosterFromLeads() {
+      const scriptElement = document.createElement('script');
+      scriptElement.src = DEPLOY_URL + "?callback=handleRosterLoad&token=" + MASTER_TOKEN + "&_cb=" + new Date().getTime();
+      document.body.appendChild(scriptElement);
+    }
+
+    // Process the names array returned from the Google Sheet
+    window.handleRosterLoad = function(data) {
+      const memberSelect = document.getElementById('teamMember');
+      memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+      
+      if (data && Array.isArray(data.names)) {
+        data.names.forEach(name => {
+          if (name) {
+            let opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            memberSelect.appendChild(opt);
+          }
+        });
+      } else {
+        memberSelect.innerHTML = '<option value="" disabled selected>⚠️ Failed to load roster names</option>';
+      }
+    };
+
     function convertTicksToTimeText(ticks) {
       let totalMinutes = ticks * 15;
       let hours = Math.floor(totalMinutes / 60);
       let minutes = totalMinutes % 60;
       let ampm = hours >= 12 ? 'PM' : 'AM';
-      
       let displayHours = hours % 12;
       if (displayHours === 0) displayHours = 12;
-      
       let displayMinutes = minutes < 10 ? '0' + minutes : minutes;
       let displayHoursStr = displayHours < 10 ? '0' + displayHours : displayHours;
-      
       return `${displayHoursStr}:${displayMinutes} ${ampm}`;
     }
 
@@ -272,7 +289,6 @@
       let startVal = parseInt(startEl.value, 10);
       let endVal = parseInt(endEl.value, 10);
       
-      // Enforce overlap crossing boundaries restriction rules dynamically
       if (startVal >= endVal) {
         if (event && event.target.id === 'sliderStartHandle') {
           endVal = startVal + 1;
@@ -283,7 +299,6 @@
         }
       }
 
-      // Calculate slider layout width percentages
       const minLimit = parseInt(startEl.min, 10);
       const maxLimit = parseInt(startEl.max, 10);
       const totalRange = maxLimit - minLimit;
@@ -294,12 +309,10 @@
       highlightRange.style.left = leftPercent + '%';
       highlightRange.style.width = widthPercent + '%';
 
-      // Update text preview elements
       const startTimeText = convertTicksToTimeText(startVal);
       const endTimeText = convertTicksToTimeText(endVal);
       document.getElementById('timePreviewDisplay').textContent = `${startTimeText} - ${endTimeText}`;
       
-      // Compute accurate duration summary texts
       let diffMinutes = (endVal - startVal) * 15;
       let durationHours = Math.floor(diffMinutes / 60);
       let durationMins = diffMinutes % 60;
@@ -310,10 +323,8 @@
       document.getElementById('durationPreviewDisplay').textContent = durationOutput.join(' ');
     }
 
-    // --- FORM SUBMISSION GATEWAY ---
     function submitTaskLog(e) {
       e.preventDefault();
-      
       const submitBtn = document.getElementById('submitBtn');
       const statusBox = document.getElementById('statusMessage');
       
@@ -321,7 +332,6 @@
       submitBtn.textContent = "Saving Log to Sheets...";
       statusBox.style.display = "none";
 
-      // Formulate target runtime parameters from slider strings
       const calculatedTimeRange = document.getElementById('timePreviewDisplay').textContent;
       const calculatedDuration = document.getElementById('durationPreviewDisplay').textContent;
       const rawProcessedInput = document.getElementById('itemsProcessed').value;
@@ -336,7 +346,6 @@
         itemsProcessed: rawProcessedInput ? parseInt(rawProcessedInput, 10) : "-"
       };
 
-      // Ship data package straight to App Script via fetch JSON POST network pipe
       fetch(DEPLOY_URL, {
         method: "POST",
         mode: "no-cors",
@@ -348,11 +357,9 @@
         statusBox.innerHTML = "🎉 Task logged successfully in real-time!";
         statusBox.style.display = "block";
         
-        // Reset descriptions & counts inputs safely, keeping date and names locked for convenience
         document.getElementById('taskDetails').value = "";
         document.getElementById('itemsProcessed').value = "";
         
-        // Reset slider to default positions (8 AM to 9 AM)
         document.getElementById('sliderStartHandle').value = "32";
         document.getElementById('sliderEndHandle').value = "36";
         syncTimeSlider();
@@ -361,7 +368,6 @@
         statusBox.className = "status-error";
         statusBox.innerHTML = "❌ Network connection dropped. Please try again.";
         statusBox.style.display = "block";
-        console.error("Transmission fault details:", err);
       })
       .finally(() => {
         submitBtn.disabled = false;
