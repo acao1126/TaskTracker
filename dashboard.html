@@ -127,16 +127,14 @@
       color: var(--text-color);
     }
 
-    .date-group { margin-bottom: 20px; }
+    .date-group { margin-bottom: 15px; }
 
-    /* Collapsible Date Header Bar styling */
     .date-header {
       background: var(--group-header-bg);
       padding: 12px 18px;
       border-radius: 8px;
       font-weight: bold;
       font-size: 16px;
-      margin-bottom: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -151,7 +149,7 @@
 
     .date-duration-total { font-size: 14px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 10px; }
 
-    /* Animated Accordion Carat Arrows */
+    /* Rotates arrow sideways when parent bar is collapsed */
     .toggle-arrow {
       font-size: 12px;
       transition: transform 0.2s ease;
@@ -161,14 +159,12 @@
       transform: rotate(-90deg);
     }
 
-    /* Target Wrapper for Date Children Content blocks */
     .date-content {
-      padding: 5px 0 15px 0;
+      padding: 15px 0 5px 0;
     }
 
     .hour-block { margin-bottom: 15px; padding-left: 10px; border-left: 2px dashed var(--border-color); }
 
-    /* Collapsible Hour Bar Block Component Header design */
     .hour-header {
       background: var(--hour-header-bg);
       color: var(--text-color);
@@ -181,7 +177,6 @@
       align-items: center;
       gap: 8px;
       border-radius: 20px;
-      margin-bottom: 10px;
       border: 1px solid var(--border-color);
       cursor: pointer;
       user-select: none;
@@ -191,12 +186,11 @@
       background-color: var(--group-header-bg);
     }
 
-    /* Content Area under an hour selection block */
     .hour-content {
-      margin-top: 5px;
+      margin-top: 15px;
     }
 
-    /* Core utilities to hide hidden state fields smoothly */
+    /* Standard Utility to toggle visibility blocks */
     .is-hidden {
       display: none !important;
     }
@@ -252,7 +246,7 @@
     <div class="metrics-row">
       <div class="metric-card"><h3 id="logsTitle">Total Logs Selected</h3><p id="statTodayLogs">-</p></div>
       <div class="metric-card"><h3 id="itemsTitle">Total Items Processed</h3><p id="statTotalItems">-</p></div>
-      <div class="metric-card"><h3>Active Team Members</h3><p id="statActiveCount">-</p></div>
+      <div class="metric-card">__Active Team Members__<p id="statActiveCount">-</p></div>
     </div>
 
     <h2>Activity Feed</h2>
@@ -456,7 +450,6 @@
       document.body.appendChild(scriptElement);
     }
 
-    // --- ACCORDION INTERACTION CONTROLLERS ---
     function toggleDateGroup(headerEl) {
       headerEl.classList.toggle('collapsed');
       const targetContent = headerEl.nextElementSibling;
@@ -464,7 +457,6 @@
     }
 
     function toggleHourBlock(headerEl) {
-      const targetArrow = headerEl.querySelector('.toggle-arrow');
       headerEl.classList.toggle('collapsed');
       const targetContent = headerEl.nextElementSibling;
       targetContent.classList.toggle('is-hidden');
@@ -516,9 +508,9 @@
         const dateGroupDiv = document.createElement('div'); 
         dateGroupDiv.className = 'date-group';
         
-        // Date Header: Built to execute toggleDateGroup on tap/click
         const headerDiv = document.createElement('div'); 
-        headerDiv.className = 'date-header';
+        // INITIAL STATE: Added 'collapsed' class by default
+        headerDiv.className = 'date-header collapsed';
         headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
         headerDiv.innerHTML = `
           <span>📅 ${formattedDate}</span>
@@ -529,9 +521,9 @@
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        // Date Content Block container wrapper
+        // INITIAL STATE: Added 'is-hidden' class to hide date blocks on launch
         const dateContentDiv = document.createElement('div');
-        dateContentDiv.className = 'date-content';
+        dateContentDiv.className = 'date-content is-hidden';
         
         const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow));
         
@@ -542,16 +534,16 @@
           const hourBlockDiv = document.createElement('div'); 
           hourBlockDiv.className = 'hour-block';
           
-          // Hour Sub-Header: Built to execute toggleHourBlock on tap/click
           const hourHeaderSpan = document.createElement('div'); 
-          hourHeaderSpan.className = 'hour-header'; 
+          // INITIAL STATE: Added 'collapsed' class by default
+          hourHeaderSpan.className = 'hour-header collapsed'; 
           hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
           hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
           
-          // Hour Content Wrapper (Holds the entry log card block grids)
+          // INITIAL STATE: Added 'is-hidden' class to hide card blocks on launch
           const hourContentDiv = document.createElement('div');
-          hourContentDiv.className = 'hour-content';
+          hourContentDiv.className = 'hour-content is-hidden';
           
           const logGrid = document.createElement('div'); 
           logGrid.className = 'log-grid';
