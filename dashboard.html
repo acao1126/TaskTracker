@@ -334,7 +334,7 @@
     function cleanAndParseDate(dateStr) {
       if (!dateStr || dateStr === "undefined") return null;
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-      let pureDatePart = dateStr.split('T')[0].split(' ')[0];
+      let pureDatePart = dateStr.toString().split('T')[0].split(' ')[0];
       if (pureDatePart.includes('/')) {
         let parts = pureDatePart.split('/');
         if (parts[0].length === 4) {
@@ -354,13 +354,14 @@
       return null;
     }
 
-    // Helper to parse individual single timestamp blocks ("08:30 AM") into clean scalar integer minutes
     function parseSingleTimeToMinutes(timeStr) {
-      if (!timeStr) return 0;
+      if (!timeStr || typeof timeStr !== 'string') return 0;
       const parts = timeStr.trim().split(' ');
       if (parts.length < 2) return 0;
       const time = parts[0]; const modifier = parts[1];
-      let [hours, minutes] = time.split(':').map(Number);
+      let timeParts = time.split(':');
+      let hours = parseInt(timeParts[0], 10);
+      let minutes = parseInt(timeParts[1], 10);
       if (isNaN(hours) || isNaN(minutes)) return 0;
       if (hours === 12) hours = (modifier === 'AM') ? 0 : 12;
       else if (modifier === 'PM') hours += 12;
@@ -368,12 +369,12 @@
     }
 
     function getStartTimeInMinutes(timeWindowStr) {
-      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
+      if (!timeWindowStr || typeof timeWindowStr !== 'string' || !timeWindowStr.includes(' - ')) return 0;
       return parseSingleTimeToMinutes(timeWindowStr.split(' - ')[0]);
     }
 
     function getHourBlockLabel(timeWindowStr) {
-      if (!timeWindowStr || !timeWindowStr.includes(' - ')) return "Unknown Time";
+      if (!timeWindowStr || typeof timeWindowStr !== 'string' || !timeWindowStr.includes(' - ')) return "Unknown Time";
       const startTimePart = timeWindowStr.split(' - ')[0];
       const parts = startTimePart.split(' ');
       if (parts.length < 2) return "Unknown Time";
@@ -498,12 +499,13 @@
       }
     }
 
-    // --- ALGORITHMIC INTERVAL MERGING ROUTINE ---
-    // Evaluates a set of item rows, merges any overlaps, and returns unique minutes worked
+    // --- FORTIFIED SANITIZED INTERVAL MERGER ENGINE ---
     function calculateNonOverlappingMinutes(itemsArray) {
       let intervals = [];
       itemsArray.forEach(item => {
-        if (!item.timeWindow || !item.timeWindow.includes(' - ')) return;
+        // Guard Rule: Skip blank, incomplete, or malformed spreadsheet lines completely
+        if (!item || !item.timeWindow || typeof item.timeWindow !== 'string' || !item.timeWindow.includes(' - ')) return;
+        
         let parts = item.timeWindow.split(' - ');
         let start = parseSingleTimeToMinutes(parts[0]);
         let end = parseSingleTimeToMinutes(parts[1]);
@@ -514,24 +516,20 @@
 
       if (intervals.length === 0) return 0;
 
-      // Sort chronologically by start window minute scalar
       intervals.sort((a, b) => a.start - b.start);
 
-      // Merge running overlapping boundary items
       let merged = [intervals[0]];
       for (let i = 1; i < intervals.length; i++) {
         let current = intervals[i];
         let lastMerged = merged[merged.length - 1];
 
         if (current.start <= lastMerged.end) {
-          // Flatten overlap by pulling out the end threshold limit bounds
           lastMerged.end = Math.max(lastMerged.end, current.end);
         } else {
           merged.push(current);
         }
       }
 
-      // Sum clean isolated windows
       let totalMinutes = 0;
       merged.forEach(interval => {
         totalMinutes += (interval.end - interval.start);
@@ -546,12 +544,14 @@
       let uniqueActiveMembers = new Set();
       const groupedData = {};
 
-      // Array to accumulate ALL matching logs across the whole selection scope for global calculations
       let globalFilteredItems = [];
 
       rawDataHistory.forEach(item => {
+        // Guard Rule: Don't process if the cell format isn't even string compatible
+        if (!item || !item.date || !item.timeWindow) return;
+
         let normalizedDate = cleanAndParseDate(item.date);
-        if (!item || !item.name || !normalizedDate || !item.timeWindow) return;
+        if (!item.name || !normalizedDate) return;
         
         const matchesName = (selectedName === "ALL" || item.name === selectedName);
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
@@ -569,20 +569,14 @@
           const hourLabel = getHourBlockLabel(item.timeWindow);
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
           groupedData[normalizedDate].hours[hourLabel].push(item);
-          
-          // Accumulate inside separate array list to run specific macro interval evaluation
           groupedData[normalizedDate].itemsList.push(item);
         }
       });
 
-      // Update Top Status Cards (Global unique non-overlapping tracking totals context mapping)
-      // If filtering by a single person, it displays their unique hours. If viewing "All Members", it scales properly.
-      let globalUniqueMinutes = calculateNonOverlappingMinutes(globalFilteredItems);
       document.getElementById('statTodayLogs').textContent = selectedLogsCount;
       document.getElementById('statTotalItems').textContent = totalItemsProcessedCount;
       document.getElementById('statActiveCount').textContent = uniqueActiveMembers.size;
 
-      // Update titles dynamically to reflect accurate interval representation
       document.getElementById('logsTitle').textContent = "Total Logs Selected";
       document.getElementById('itemsTitle').textContent = "Total Items Processed";
 
@@ -596,7 +590,6 @@
         const dateObj = new Date(date + "T00:00:00");
         const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
         
-        // Calculate clean de-duplicated times explicitly for this date layer block
         let dateUniqueMinutes = calculateNonOverlappingMinutes(dateGroup.itemsList);
 
         const dateGroupDiv = document.createElement('div'); 
