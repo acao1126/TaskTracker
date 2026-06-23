@@ -115,6 +115,7 @@
     function handlePinInput(inputEl) {
       document.getElementById('pinError').textContent = ""; 
       const typedPin = inputEl.value;
+
       if (typedPin.length === 6) {
         if (_vP(typedPin)) {
           activeToken = typedPin;
@@ -139,64 +140,40 @@
       }
     });
 
-    // Extract values safely from object properties OR direct numerical index arrays
-    function safeExtractField(item, possibleKeys, arrayIndex) {
-      if (!item) return '';
-      // Try keys first
-      for (let key of possibleKeys) {
-        if (item[key] !== undefined && item[key] !== null) return item[key].toString();
-      }
-      // Fall back to direct array index sniffing if data was mapped as an un-keyed row array
-      if (Array.isArray(item) && item[arrayIndex] !== undefined && item[arrayIndex] !== null) {
-        return item[arrayIndex].toString();
-      }
-      return '';
-    }
-
-    function getItemDate(item) { return safeExtractField(item, ['date', 'Date'], 1); }
-    function getItemName(item) { return safeExtractField(item, ['name', 'Name'], 2); }
-    function getItemTimeWindow(item) { return safeExtractField(item, ['timeWindow', 'TimeWindow', 'combinedTimeRange'], 3); }
-    function getItemDetails(item) { return safeExtractField(item, ['details', 'Details', 'taskDetails', 'activityDetails'], 4); }
-    function getItemDuration(item) { return safeExtractField(item, ['duration', 'Duration'], 5); }
-    function getItemProcessed(item) { return safeExtractField(item, ['itemsProcessed', 'ItemsProcessed', 'processed'], 6); }
-
     function cleanAndParseDate(dateStr) {
-      try {
-        if (!dateStr || dateStr === "undefined") return null;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-        let pureDatePart = dateStr.toString().split('T')[0].split(' ')[0];
-        if (pureDatePart.includes('/')) {
-          let parts = pureDatePart.split('/');
-          if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-          if (parts[2] && parts[2].length === 4) return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+      if (!dateStr || dateStr === "undefined") return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+      let pureDatePart = dateStr.toString().split('T')[0].split(' ')[0];
+      if (pureDatePart.includes('/')) {
+        let parts = pureDatePart.split('/');
+        if (parts[0].length === 4) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
         }
-        let dObj = new Date(dateStr);
-        if (!isNaN(dObj.getTime())) {
-          return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+        if (parts[2] && parts[2].length === 4) {
+          return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
         }
-      } catch(e) {}
+      }
+      let dObj = new Date(dateStr);
+      if (!isNaN(dObj.getTime())) {
+        let y = dObj.getFullYear();
+        let m = String(dObj.getMonth() + 1).padStart(2, '0');
+        let d = String(dObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
       return null;
-    }
-
-    function parseSingleTimeToMinutes(timeStr) {
-      try {
-        if (!timeStr || typeof timeStr !== 'string') return 0;
-        const parts = timeStr.trim().split(' ');
-        if (parts.length < 2) return 0;
-        const time = parts[0]; const modifier = parts[1];
-        let timeParts = time.split(':');
-        let hours = parseInt(timeParts[0], 10);
-        let minutes = parseInt(timeParts[1], 10);
-        if (isNaN(hours) || isNaN(minutes)) return 0;
-        if (hours === 12) hours = (modifier === 'AM') ? 0 : 12;
-        else if (modifier === 'PM') hours += 12;
-        return (hours * 60) + minutes;
-      } catch(e) { return 0; }
     }
 
     function getStartTimeInMinutes(timeWindowStr) {
       if (!timeWindowStr || !timeWindowStr.includes(' - ')) return 0;
-      return parseSingleTimeToMinutes(timeWindowStr.split(' - ')[0]);
+      const startTimePart = timeWindowStr.split(' - ')[0];
+      const parts = startTimePart.split(' ');
+      if (parts.length < 2) return 0;
+      const time = parts[0]; const modifier = parts[1];
+      let [hours, minutes] = time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 0;
+      if (hours === 12) hours = (modifier === 'AM') ? 0 : 12;
+      else if (modifier === 'PM') hours += 12;
+      return (hours * 60) + minutes;
     }
 
     function getHourBlockLabel(timeWindowStr) {
@@ -215,59 +192,77 @@
       return `${startHourText}:00 ${modifier} - ${endHourText}:00 ${modifier}`;
     }
 
+    function parseDurationToMinutes(durationStr) {
+      if (!durationStr || durationStr === "0 mins") return 0;
+      let totalMinutes = 0;
+      const hourMatch = durationStr.match(/(\d+)\s*hr/);
+      const minMatch = durationStr.match(/(\d+)\s*min/);
+      if (hourMatch) totalMinutes += parseInt(hourMatch[1], 10) * 60;
+      if (minMatch) totalMinutes += parseInt(minMatch[1], 10);
+      return totalMinutes;
+    }
+
+    // Standard linear textual reconstruction summation format loop
+    function formatMinutesToText(totalMinutes) {
+      if (totalMinutes === 0) return "0 mins";
+      const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60;
+      let output = [];
+      if (hours > 0) output.push(`${hours} hr${hours > 1 ? 's' : ''}`);
+      if (minutes > 0) output.push(`${minutes} mins`);
+      return output.join(" ");
+    }
+
     function initializeWithCache() {
       const cachedData = localStorage.getItem('tracker_dashboard_cache');
       const cachedNames = localStorage.getItem('tracker_names_cache');
       if (cachedData && cachedNames) {
-        try {
-          rawDataHistory = JSON.parse(cachedData) || [];
-          populateDropdowns(JSON.parse(cachedNames) || [], rawDataHistory);
-          buildGroupedDashboard(activeNameFilter, activeDateFilter);
-          document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
-        } catch(e) {}
+        rawDataHistory = JSON.parse(cachedData);
+        populateDropdowns(JSON.parse(cachedNames), rawDataHistory);
+        buildGroupedDashboard(activeNameFilter, activeDateFilter);
+        document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
       } else {
-        document.getElementById('syncText').textContent = "Downloading databases from Google Sheet...";
+        document.getElementById('syncText').textContent = "No cache found. Downloading master sheet databases...";
       }
       fetchFreshCloudData();
     }
 
     function populateDropdowns(namesArray, historyData) {
       const nameSelect = document.getElementById('filterName');
+      const currentNameSelection = nameSelect.value;
       nameSelect.innerHTML = '<option value="ALL">All Team Members</option>';
-      if(Array.isArray(namesArray)) {
-        namesArray.forEach(name => {
-          if(name) { let opt = document.createElement('option'); opt.value = name; opt.textContent = name; nameSelect.appendChild(opt); }
-        });
-      }
+      namesArray.forEach(name => {
+        if(name) { let opt = document.createElement('option'); opt.value = name; opt.textContent = name; nameSelect.appendChild(opt); }
+      });
+      if(currentNameSelection) nameSelect.value = currentNameSelection;
 
       const dateSelect = document.getElementById('filterDate');
+      const currentDateSelection = dateSelect.value;
       dateSelect.innerHTML = '<option value="ALL">All Dates</option>';
       
-      if(Array.isArray(historyData)) {
-        const uniqueDates = [...new Set(historyData
-          .map(item => item ? cleanAndParseDate(getItemDate(item)) : null)
-          .filter(d => d !== null)
-        )].sort((a,b) => b.localeCompare(a));
-        
-        uniqueDates.forEach(date => {
-          let label = date;
-          try {
-            const dateObj = new Date(date + "T00:00:00");
-            if (!isNaN(dateObj.getTime())) {
-              label = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-            }
-          } catch(err) {}
-          let opt = document.createElement('option'); opt.value = date; opt.textContent = label; dateSelect.appendChild(opt);
-        });
-      }
+      const uniqueDates = [...new Set(historyData
+        .map(item => cleanAndParseDate(item.date))
+        .filter(d => d !== null)
+      )].sort((a,b) => b.localeCompare(a));
+      
+      uniqueDates.forEach(date => {
+        const dateObj = new Date(date + "T00:00:00");
+        if (!isNaN(dateObj.getTime())) {
+          const formattedLabel = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          let opt = document.createElement('option'); opt.value = date; opt.textContent = formattedLabel; dateSelect.appendChild(opt);
+        }
+      });
+      if(currentDateSelection) dateSelect.value = currentDateSelection;
     }
 
     window.handleGoogleResponse = function(data) {
-      if (!data) return;
-      if(data.secured && (!data.names || data.names.length === 0)) {
-        document.getElementById('syncText').textContent = "⛔ Security block active. Check token match.";
+      if(data.secured && data.names.length === 0) {
+        document.getElementById('syncText').textContent = "⛔ Access Revoked by Google Cloud Security Rule.";
+        document.getElementById('syncDot').style.backgroundColor = "#ef4444";
+        localStorage.clear();
+        setTimeout(() => { location.reload(); }, 2000);
         return;
       }
+
       rawDataHistory = data.history || [];
       const incomingNames = data.names || [];
       localStorage.setItem('tracker_dashboard_cache', JSON.stringify(rawDataHistory));
@@ -275,26 +270,32 @@
       populateDropdowns(incomingNames, rawDataHistory);
       buildGroupedDashboard(activeNameFilter, activeDateFilter);
       document.getElementById('syncDot').className = "dot synced";
-      document.getElementById('syncText').textContent = "Synced with live database.";
+      document.getElementById('syncText').textContent = "Synced with live Google Sheet database (Real-Time).";
     };
 
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
       scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + activeToken + "&_cb=" + new Date().getTime();
       scriptElement.onerror = function() {
-        document.getElementById('syncText').textContent = "Synchronization loop connection dropped.";
+        document.getElementById('syncText').textContent = "Offline Mode active. Cloud synchronization failed.";
       };
       document.body.appendChild(scriptElement);
     }
 
     function toggleDateGroup(headerEl) {
       headerEl.classList.toggle('collapsed');
-      headerEl.nextElementSibling.classList.toggle('is-hidden');
+      const targetContent = headerEl.nextElementSibling;
+      targetContent.classList.toggle('is-hidden');
+      if(headerEl.classList.contains('collapsed')) {
+        const toggleBtn = headerEl.querySelector('.expand-all-action-link');
+        toggleBtn.textContent = "Expand All";
+      }
     }
 
     function toggleHourBlock(headerEl) {
       headerEl.classList.toggle('collapsed');
-      headerEl.nextElementSibling.classList.toggle('is-hidden');
+      const targetContent = headerEl.nextElementSibling;
+      targetContent.classList.toggle('is-hidden');
     }
 
     function toggleAllHoursInDate(event, linkEl) {
@@ -319,74 +320,32 @@
       }
     }
 
-    function calculateNonOverlappingMinutes(itemsArray) {
-      let intervals = [];
-      itemsArray.forEach(item => {
-        let tw = getItemTimeWindow(item);
-        if (!tw || !tw.includes(' - ')) return;
-        let parts = tw.split(' - ');
-        let start = parseSingleTimeToMinutes(parts[0]);
-        let end = parseSingleTimeToMinutes(parts[1]);
-        if (start < end) intervals.push({ start: start, end: end });
-      });
-      if (intervals.length === 0) return 0;
-      intervals.sort((a, b) => a.start - b.start);
-      let merged = [intervals[0]];
-      for (let i = 1; i < intervals.length; i++) {
-        let current = intervals[i]; let lastMerged = merged[merged.length - 1];
-        if (current.start <= lastMerged.end) lastMerged.end = Math.max(lastMerged.end, current.end);
-        else merged.push(current);
-      }
-      let totalMinutes = 0;
-      merged.forEach(interval => { totalMinutes += (interval.end - interval.start); });
-      return totalMinutes;
-    }
-
-    function escapeTextHTML(str) {
-      if (!str) return '';
-      return str.toString()
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
     function buildGroupedDashboard(selectedName, selectedDate) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
       let selectedLogsCount = 0, totalItemsProcessedCount = 0;
       let uniqueActiveMembers = new Set();
       const groupedData = {};
-      let globalFilteredItems = [];
 
       rawDataHistory.forEach(item => {
-        if (!item) return;
-        let rawDate = getItemDate(item);
-        let rawTimeWindow = getItemTimeWindow(item);
-        let rawName = getItemName(item);
-
-        if (!rawDate || !rawTimeWindow || !rawName) return;
-        let normalizedDate = cleanAndParseDate(rawDate);
-        if (!normalizedDate) return;
+        let normalizedDate = cleanAndParseDate(item.date);
+        if (!item || !item.name || !normalizedDate || !item.timeWindow) return;
         
-        const matchesName = (selectedName === "ALL" || rawName === selectedName);
+        const matchesName = (selectedName === "ALL" || item.name === selectedName);
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
         
         if (matchesName && matchesDate) {
           selectedLogsCount++;
-          let rawProcessed = getItemProcessed(item);
-          if (rawProcessed && rawProcessed !== "-") {
-            totalItemsProcessedCount += parseInt(rawProcessed, 10) || 0;
-          }
-          uniqueActiveMembers.add(rawName);
-          globalFilteredItems.push(item);
+          if (item.itemsProcessed && item.itemsProcessed !== "-") totalItemsProcessedCount += parseInt(item.itemsProcessed, 10) || 0;
+          uniqueActiveMembers.add(item.name);
           
-          if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, itemsList: [] };
-          const hourLabel = getHourBlockLabel(rawTimeWindow);
+          if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, totalMinutes: 0 };
+          const hourLabel = getHourBlockLabel(item.timeWindow);
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
           groupedData[normalizedDate].hours[hourLabel].push(item);
-          groupedData[normalizedDate].itemsList.push(item);
+          
+          // Reverted back to simple direct duration calculation additions directly
+          groupedData[normalizedDate].totalMinutes += parseDurationToMinutes(item.duration);
         }
       });
 
@@ -396,80 +355,70 @@
 
       const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a));
       if (sortedDates.length === 0) {
-        feedContainer.innerHTML = "<div class='status-loading'>No task logs found matching query filters.</div>"; return;
+        feedContainer.innerHTML = "<div class='status-loading'>No task logs match your chosen query filters.</div>"; return;
       }
 
-      sortedDates.forEach(date => {
+      sortedDates.forEach((date, dateIdx) => {
         const dateGroup = groupedData[date];
+        const dateObj = new Date(date + "T00:00:00");
+        const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
         
-        let displayDateText = date;
-        try {
-          const dateObj = new Date(date + "T00:00:00");
-          if (!isNaN(dateObj.getTime())) {
-            displayDateText = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-          }
-        } catch(err) {}
-
-        let dateUniqueMinutes = calculateNonOverlappingMinutes(dateGroup.itemsList);
-
-        const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
-        const headerDiv = document.createElement('div'); headerDiv.className = 'date-header collapsed';
+        const dateGroupDiv = document.createElement('div'); 
+        dateGroupDiv.className = 'date-group';
+        
+        const headerDiv = document.createElement('div'); 
+        headerDiv.className = 'date-header collapsed';
         headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
         headerDiv.innerHTML = `
           <div class="date-header-left">
-            <span>📅 ${escapeTextHTML(displayDateText)}</span>
+            <span>📅 ${formattedDate}</span>
             <button class="expand-all-action-link" onclick="toggleAllHoursInDate(event, this)">Expand All</button>
           </div>
-          <span class="date-duration-total">Unique Time: <strong>${formatMinutesToText(dateUniqueMinutes)}</strong><span class="toggle-arrow">▼</span></span>
+          <span class="date-duration-total">
+            Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
+            <span class="toggle-arrow">▼</span>
+          </span>
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        const dateContentDiv = document.createElement('div'); dateContentDiv.className = 'date-content is-hidden';
-        const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => {
-          return getStartTimeInMinutes(getItemTimeWindow(dateGroup.hours[a][0])) - getStartTimeInMinutes(getItemTimeWindow(dateGroup.hours[b][0]));
-        });
+        const dateContentDiv = document.createElement('div');
+        dateContentDiv.className = 'date-content is-hidden';
         
-        sortedHours.forEach(hourLabel => {
+        const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow));
+        
+        sortedHours.forEach((hourLabel, hourIdx) => {
           const tasksInHour = dateGroup.hours[hourLabel];
-          tasksInHour.sort((a, b) => getStartTimeInMinutes(getItemTimeWindow(a)) - getStartTimeInMinutes(getItemTimeWindow(b)));
+          tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
           
-          const hourBlockDiv = document.createElement('div'); hourBlockDiv.className = 'hour-block';
-          const hourHeaderSpan = document.createElement('div'); hourHeaderSpan.className = 'hour-header collapsed'; 
+          const hourBlockDiv = document.createElement('div'); 
+          hourBlockDiv.className = 'hour-block';
+          
+          const hourHeaderSpan = document.createElement('div'); 
+          hourHeaderSpan.className = 'hour-header collapsed'; 
           hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
-          hourHeaderSpan.innerHTML = `⏰ ${escapeTextHTML(hourLabel)} <span class="toggle-arrow">▼</span>`;
+          hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
           
-          const hourContentDiv = document.createElement('div'); hourContentDiv.className = 'hour-content is-hidden';
-          const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
+          const hourContentDiv = document.createElement('div');
+          hourContentDiv.className = 'hour-content is-hidden';
+          
+          const logGrid = document.createElement('div'); 
+          logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
-            let cleanName = escapeTextHTML(getItemName(item) || 'Unknown');
-            let cleanTime = escapeTextHTML(getItemTimeWindow(item) || '00:00 - 00:00');
-            let cleanDetails = escapeTextHTML(getItemDetails(item) || '-');
-            let cleanDuration = escapeTextHTML(getItemDuration(item) || '0 mins');
-            let rawProcessed = getItemProcessed(item);
-            let itemsText = (rawProcessed && rawProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(rawProcessed)}</strong>` : '';
-            
-            let card = document.createElement('div'); 
-            card.className = 'log-card';
-            card.innerHTML = `
-              <div>
-                <div class="log-header">
-                  <span class="team-name">👤 ${cleanName}</span>
-                  <span class="task-time-tag">⏱️ ${cleanTime}</span>
-                </div>
-                <div class="task-desc">${cleanDetails}</div>
-              </div>
-              <div class="log-footer">
-                <span>⏳ ${cleanDuration}</span>
-                ${itemsText ? `<span>${itemsText}</span>` : ''}
-              </div>
-            `;
+            let card = document.createElement('div'); card.className = 'log-card';
+            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
+            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
             logGrid.appendChild(card);
           });
-          hourContentDiv.appendChild(logGrid); hourBlockDiv.appendChild(hourContentDiv); dateContentDiv.appendChild(hourBlockDiv);
+          
+          hourContentDiv.appendChild(logGrid);
+          hourBlockDiv.appendChild(hourContentDiv);
+          dateContentDiv.appendChild(hourBlockDiv);
         });
-        dateGroupDiv.appendChild(dateContentDiv); feedContainer.appendChild(dateGroupDiv);
+        
+        dateGroupDiv.appendChild(dateContentDiv);
+        feedContainer.appendChild(dateGroupDiv);
       });
     }
 
