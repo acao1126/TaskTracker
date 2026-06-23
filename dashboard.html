@@ -153,7 +153,6 @@
       gap: 15px;
     }
 
-    /* Clean minimalistic styling for the expand text toggle link */
     .expand-all-action-link {
       font-size: 12px;
       font-weight: 600;
@@ -259,7 +258,7 @@
     <div class="pin-container">
       <h2>Enter Security PIN</h2>
       <p style="font-size: 14px; color: var(--text-muted); margin: 0;">Access restricted to authorized team members.</p>
-      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="•••••" oninput="handlePinInput(this)">
+      <input type="password" id="classicPinInput" class="classic-pin-input" maxlength="6" placeholder="••••••" oninput="handlePinInput(this)">
       <div id="pinError"></div>
     </div>
   </div>
@@ -477,6 +476,12 @@
       headerEl.classList.toggle('collapsed');
       const targetContent = headerEl.nextElementSibling;
       targetContent.classList.toggle('is-hidden');
+      
+      // Smart check: If user manually collapses the parent row, sync button state to "Expand All"
+      if(headerEl.classList.contains('collapsed')) {
+        const toggleBtn = headerEl.querySelector('.expand-all-action-link');
+        toggleBtn.textContent = "Expand All";
+      }
     }
 
     function toggleHourBlock(headerEl) {
@@ -485,25 +490,37 @@
       targetContent.classList.toggle('is-hidden');
     }
 
-    // --- NEW: MACRO DATES MASS ACCORDION CONTROLLER ---
-    function expandAllHoursInDate(event, linkEl) {
-      // Vital safeguard: Stops clicking the button from closing the parent Date Bar
-      event.stopPropagation(); 
+    // --- UPDATED: DUAL ACTION MASS ACCORDION CONTROLLER ---
+    function toggleAllHoursInDate(event, linkEl) {
+      event.stopPropagation(); // Stop parent bar click trigger
       
       const parentDateGroup = linkEl.closest('.date-group');
       const dateHeader = parentDateGroup.querySelector('.date-header');
       const dateContent = parentDateGroup.querySelector('.date-content');
-      
-      // 1. Uncollapse the main parent Date block container row
-      dateHeader.classList.remove('collapsed');
-      dateContent.classList.remove('is-hidden');
-      
-      // 2. Query and open every single Hour child container loop inside this day
       const hourHeaders = parentDateGroup.querySelectorAll('.hour-header');
       const hourContents = parentDateGroup.querySelectorAll('.hour-content');
       
-      hourHeaders.forEach(header => header.classList.remove('collapsed'));
-      hourContents.forEach(content => content.classList.remove('is-hidden'));
+      const isExpanding = linkEl.textContent === "Expand All";
+      
+      if (isExpanding) {
+        // --- MASS EXPAND ACTION ---
+        linkEl.textContent = "Collapse All";
+        
+        dateHeader.classList.remove('collapsed');
+        dateContent.classList.remove('is-hidden');
+        
+        hourHeaders.forEach(header => header.classList.remove('collapsed'));
+        hourContents.forEach(content => content.classList.remove('is-hidden'));
+      } else {
+        // --- MASS COLLAPSE ACTION ---
+        linkEl.textContent = "Expand All";
+        
+        dateHeader.classList.add('collapsed');
+        dateContent.classList.add('is-hidden');
+        
+        hourHeaders.forEach(header => header.classList.add('collapsed'));
+        hourContents.forEach(content => content.classList.add('is-hidden'));
+      }
     }
 
     function buildGroupedDashboard(selectedName, selectedDate) {
@@ -558,7 +575,7 @@
         headerDiv.innerHTML = `
           <div class="date-header-left">
             <span>📅 ${formattedDate}</span>
-            <button class="expand-all-action-link" onclick="expandAllHoursInDate(event, this)">Expand All</button>
+            <button class="expand-all-action-link" onclick="toggleAllHoursInDate(event, this)">Expand All</button>
           </div>
           <span class="date-duration-total">
             Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
