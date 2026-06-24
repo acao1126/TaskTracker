@@ -238,9 +238,7 @@
       const dd = String(today.getDate()).padStart(2, '0');
       document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
       
-      // Force initialize default slider calculation bounds immediately on boot
       syncTimeSlider(null);
-      
       fetchLiveRosterFromLeads();
     });
 
@@ -288,7 +286,6 @@
       let startVal = parseInt(startEl.value, 10);
       let endVal = parseInt(endEl.value, 10);
       
-      // Enforce overlap crossing boundaries restriction rules safely
       if (startVal >= endVal) {
         if (e && e.target && e.target.id === 'sliderStartHandle') {
           endVal = startVal + 1;
@@ -332,17 +329,29 @@
       submitBtn.textContent = "Saving Log to Sheets...";
       statusBox.style.display = "none";
 
-      // Direct fallback parsing to make sure values are never lost or undefined
-      const calculatedTimeRange = document.getElementById('timePreviewDisplay').innerText || document.getElementById('timePreviewDisplay').textContent;
-      const calculatedDuration = document.getElementById('durationPreviewDisplay').innerText || document.getElementById('durationPreviewDisplay').textContent;
+      // --- FAILSAFE EXTRACTION ZONE ---
+      // Instead of reading the screen text nodes, calculate string variables directly from input values right now
+      const startTicks = parseInt(document.getElementById('sliderStartHandle').value, 10);
+      const endTicks = parseInt(document.getElementById('sliderEndHandle').value, 10);
+      
+      const forcedTimeRangeString = convertTicksToTimeText(startTicks) + " - " + convertTicksToTimeText(endTicks);
+      
+      let totalMins = (endTicks - startTicks) * 15;
+      let calculatedHours = Math.floor(totalMins / 60);
+      let calculatedMins = totalMins % 60;
+      let durationParts = [];
+      if (calculatedHours > 0) durationParts.push(`${calculatedHours} hr${calculatedHours > 1 ? 's' : ''}`);
+      if (calculatedMins > 0) durationParts.push(`${calculatedMins} min${calculatedMins > 1 ? 's' : ''}`);
+      const forcedDurationString = durationParts.join(' ') || "0 mins";
+
       const rawProcessedInput = document.getElementById('itemsProcessed').value;
 
       const payloadData = {
         token: MASTER_TOKEN,
         name: document.getElementById('teamMember').value,
         date: document.getElementById('taskDate').value,
-        timeWindow: calculatedTimeRange,
-        duration: calculatedDuration,
+        timeWindow: forcedTimeRangeString,   // Guarantees zero undefined breaks
+        duration: forcedDurationString,       // Guarantees zero undefined breaks
         details: document.getElementById('taskDetails').value,
         itemsProcessed: rawProcessedInput ? parseInt(rawProcessedInput, 10) : "-"
       };
