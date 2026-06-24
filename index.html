@@ -67,80 +67,6 @@
 
     textarea { resize: vertical; min-height: 90px; }
 
-    .slider-metadata {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      background: var(--bg-color);
-      padding: 8px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-    }
-    .slider-time-preview { font-weight: bold; color: var(--accent-color); font-size: 14px; }
-    .slider-duration-preview { font-weight: 700; font-size: 14px; background: var(--accent-color); color: #ffffff; padding: 2px 8px; border-radius: 12px; }
-
-    .slider-track-container {
-      position: relative;
-      height: 40px;
-      margin-top: 10px;
-    }
-    .slider-base-bar {
-      position: absolute;
-      top: 18px; left: 0; right: 0;
-      height: 6px;
-      background-color: var(--border-color);
-      border-radius: 3px;
-      z-index: 1;
-    }
-    .slider-active-range {
-      position: absolute;
-      top: 18px;
-      height: 6px;
-      background-color: var(--accent-color);
-      border-radius: 3px;
-      z-index: 2;
-    }
-    .slider-input-handle {
-      position: absolute;
-      width: 100%;
-      top: 6px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: transparent;
-      pointer-events: none;
-      margin: 0;
-      z-index: 3;
-    }
-    .slider-input-handle::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 24px; width: 24px;
-      border-radius: 50%;
-      background: #ffffff;
-      border: 3px solid var(--accent-color);
-      cursor: pointer;
-      pointer-events: auto;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-    .slider-input-handle::-moz-range-thumb {
-      height: 18px; width: 18px;
-      border-radius: 50%;
-      background: #ffffff;
-      border: 3px solid var(--accent-color);
-      cursor: pointer;
-      pointer-events: auto;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-    .slider-axis-labels {
-      display: flex;
-      justify-content: space-between;
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 500;
-      margin-top: 4px;
-      padding: 0 2px;
-    }
-
     button {
       width: 100%;
       padding: 14px;
@@ -172,7 +98,7 @@
 <body>
 
   <div class="form-container">
-    <h2>🚀 Team Task Logger</h2>
+    <h2>🚀 Team Task Tracker</h2>
     <form id="taskForm" onsubmit="submitTaskLog(event)">
       
       <div class="form-group">
@@ -188,27 +114,10 @@
       </div>
 
       <div class="form-group">
-        <label>Time Window</label>
-        
-        <div class="slider-metadata">
-          <div class="slider-time-preview" id="timePreviewDisplay">08:00 AM - 09:00 AM</div>
-          <div class="slider-duration-preview" id="durationPreviewDisplay">1 hr</div>
-        </div>
-
-        <div class="slider-track-container">
-          <div class="slider-base-bar"></div>
-          <div class="slider-active-range" id="sliderHighlightRange"></div>
-          
-          <input type="range" id="sliderStartHandle" class="slider-input-handle" min="24" max="88" step="1" value="32" oninput="syncTimeSlider(event)">
-          <input type="range" id="sliderEndHandle" class="slider-input-handle" min="24" max="88" step="1" value="36" oninput="syncTimeSlider(event)">
-        </div>
-        
-        <div class="slider-axis-labels">
-          <span>6 AM</span>
-          <span>12 PM</span>
-          <span>4 PM</span>
-          <span>10 PM</span>
-        </div>
+        <label for="timeWindow">Time Window</label>
+        <select id="timeWindow" required>
+          <option value="" disabled selected>Select time range...</option>
+        </select>
       </div>
 
       <div class="form-group">
@@ -238,9 +147,76 @@
       const dd = String(today.getDate()).padStart(2, '0');
       document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
       
-      syncTimeSlider(null);
-      fetchLiveRosterFromLeads();
+      generateOriginalTimeDropdownOptions();
+      
+      // CACHE STRATEGY: Try loading locally saved roster first for an instant draw
+      initializeRosterWithCache();
     });
+
+    function generateOriginalTimeDropdownOptions() {
+      const timeSelect = document.getElementById('timeWindow');
+      for(let h=0; h<24; h++) {
+        for(let m=0; m<60; m+=15) {
+          let startH = h % 12 === 0 ? 12 : h % 12;
+          let startM = m === 0 ? "00" : m;
+          let startAMPM = h >= 12 ? "PM" : "AM";
+          
+          let endTotalMins = (h * 60) + m + 15;
+          let endHRaw = Math.floor(endTotalMins / 60) % 24;
+          let endMRaw = endTotalMins % 60;
+          
+          let endH = endHRaw % 12 === 0 ? 12 : endHRaw % 12;
+          let endM = endMRaw === 0 ? "00" : endMRaw;
+          let endAMPM = endHRaw >= 12 ? "PM" : "AM";
+          
+          let padStartH = startH < 10 ? "0" + startH : startH;
+          let padEndH = endH < 10 ? "0" + endH : endH;
+          
+          let optionStr = `${padStartH}:${startM} ${startAMPM} - ${padEndH}:${endM} ${endAMPM}`;
+          let opt = document.createElement('option');
+          opt.value = optionStr;
+          opt.textContent = optionStr;
+          timeSelect.appendChild(opt);
+        }
+      }
+    }
+
+    // --- INSTANT CACHE RENDERER ---
+    function initializeRosterWithCache() {
+      const cachedNames = localStorage.getItem('tracker_roster_names_cache');
+      
+      if (cachedNames) {
+        try {
+          const parsedNames = JSON.parse(cachedNames);
+          renderRosterDropdown(parsedNames);
+        } catch(e) { console.error("Roster cache read failed:", e); }
+      }
+      
+      // Quietly fetch from sheet in background to ensure sync is fresh
+      fetchLiveRosterFromLeads();
+    }
+
+    function renderRosterDropdown(namesArray) {
+      const memberSelect = document.getElementById('teamMember');
+      const currentSelection = memberSelect.value;
+      
+      memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+      
+      if (Array.isArray(namesArray) && namesArray.length > 0) {
+        namesArray.forEach(name => {
+          if (name) {
+            let opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            memberSelect.appendChild(opt);
+          }
+        });
+        // Restore user selection if they were mid-fill during background sync refresh
+        if (currentSelection) memberSelect.value = currentSelection;
+      } else {
+        memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
+      }
+    }
 
     function fetchLiveRosterFromLeads() {
       const scriptElement = document.createElement('script');
@@ -249,75 +225,42 @@
     }
 
     window.handleRosterLoad = function(data) {
-      const memberSelect = document.getElementById('teamMember');
-      memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
-      
       if (data && Array.isArray(data.names)) {
-        data.names.forEach(name => {
-          if (name) {
-            let opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            memberSelect.appendChild(opt);
-          }
-        });
+        const cleanNames = data.names.filter(Boolean);
+        
+        // Save to browser device memory for next launch loop
+        localStorage.setItem('tracker_roster_names_cache', JSON.stringify(cleanNames));
+        
+        // Refresh dropdown smoothly
+        renderRosterDropdown(cleanNames);
       } else {
-        memberSelect.innerHTML = '<option value="" disabled selected>⚠️ Failed to load roster names</option>';
+        const memberSelect = document.getElementById('teamMember');
+        if (!memberSelect.value) {
+          memberSelect.innerHTML = '<option value="" disabled selected>⚠️ Failed to load roster names</option>';
+        }
       }
     };
 
-    function convertTicksToTimeText(ticks) {
-      let totalMinutes = ticks * 15;
-      let hours = Math.floor(totalMinutes / 60);
-      let minutes = totalMinutes % 60;
-      let ampm = hours >= 12 ? 'PM' : 'AM';
-      let displayHours = hours % 12;
-      if (displayHours === 0) displayHours = 12;
-      let displayMinutes = minutes < 10 ? '0' + minutes : minutes;
-      let displayHoursStr = displayHours < 10 ? '0' + displayHours : displayHours;
-      return `${displayHoursStr}:${displayMinutes} ${ampm}`;
-    }
-
-    function syncTimeSlider(e) {
-      const startEl = document.getElementById('sliderStartHandle');
-      const endEl = document.getElementById('sliderEndHandle');
-      const highlightRange = document.getElementById('sliderHighlightRange');
-      
-      let startVal = parseInt(startEl.value, 10);
-      let endVal = parseInt(endEl.value, 10);
-      
-      if (startVal >= endVal) {
-        if (e && e.target && e.target.id === 'sliderStartHandle') {
-          endVal = startVal + 1;
-          endEl.value = endVal;
-        } else {
-          startVal = endVal - 1;
-          startEl.value = startVal;
+    function calculateStringDuration(timeWindowStr) {
+      if(!timeWindowStr || !timeWindowStr.includes(' - ')) return "15 mins";
+      try {
+        let parts = timeWindowStr.split(' - ');
+        function toMins(tStr) {
+          let clean = tStr.trim().split(' ');
+          let [h, m] = clean[0].split(':').map(Number);
+          if(h === 12) h = clean[1] === 'AM' ? 0 : 12;
+          else if(clean[1] === 'PM') h += 12;
+          return (h * 60) + m;
         }
-      }
-
-      const minLimit = parseInt(startEl.min, 10);
-      const maxLimit = parseInt(startEl.max, 10);
-      const totalRange = maxLimit - minLimit;
-      
-      const leftPercent = ((startVal - minLimit) / totalRange) * 100;
-      const widthPercent = ((endVal - startVal) / totalRange) * 100;
-      
-      highlightRange.style.left = leftPercent + '%';
-      highlightRange.style.width = widthPercent + '%';
-
-      const startTimeText = convertTicksToTimeText(startVal);
-      const endTimeText = convertTicksToTimeText(endVal);
-      document.getElementById('timePreviewDisplay').textContent = `${startTimeText} - ${endTimeText}`;
-      
-      let diffMinutes = (endVal - startVal) * 15;
-      let durationHours = Math.floor(diffMinutes / 60);
-      let durationMins = diffMinutes % 60;
-      
-      let durationOutput = [];
-      if (durationHours > 0) durationOutput.push(`${durationHours} hr${durationHours > 1 ? 's' : ''}`);
-      if (durationMins > 0) durationOutput.push(`${durationMins} min${durationMins > 1 ? 's' : ''}`);
-      document.getElementById('durationPreviewDisplay').textContent = durationOutput.join(' ');
+        let diff = toMins(parts[1]) - toMins(parts[0]);
+        if(diff < 0) diff += 1440; 
+        let hrs = Math.floor(diff / 60);
+        let mins = diff % 60;
+        let out = [];
+        if(hrs > 0) out.push(`${hrs} hr${hrs > 1 ? 's' : ''}`);
+        if(mins > 0) out.push(`${mins} min${mins > 1 ? 's' : ''}`);
+        return out.join(' ') || "0 mins";
+      } catch(e) { return "15 mins"; }
     }
 
     function submitTaskLog(e) {
@@ -329,29 +272,16 @@
       submitBtn.textContent = "Saving Log to Sheets...";
       statusBox.style.display = "none";
 
-      // --- FAILSAFE EXTRACTION ZONE ---
-      // Instead of reading the screen text nodes, calculate string variables directly from input values right now
-      const startTicks = parseInt(document.getElementById('sliderStartHandle').value, 10);
-      const endTicks = parseInt(document.getElementById('sliderEndHandle').value, 10);
-      
-      const forcedTimeRangeString = convertTicksToTimeText(startTicks) + " - " + convertTicksToTimeText(endTicks);
-      
-      let totalMins = (endTicks - startTicks) * 15;
-      let calculatedHours = Math.floor(totalMins / 60);
-      let calculatedMins = totalMins % 60;
-      let durationParts = [];
-      if (calculatedHours > 0) durationParts.push(`${calculatedHours} hr${calculatedHours > 1 ? 's' : ''}`);
-      if (calculatedMins > 0) durationParts.push(`${calculatedMins} min${calculatedMins > 1 ? 's' : ''}`);
-      const forcedDurationString = durationParts.join(' ') || "0 mins";
-
+      const selectedTimeRange = document.getElementById('timeWindow').value;
+      const computedDurationText = calculateStringDuration(selectedTimeRange);
       const rawProcessedInput = document.getElementById('itemsProcessed').value;
 
       const payloadData = {
         token: MASTER_TOKEN,
         name: document.getElementById('teamMember').value,
         date: document.getElementById('taskDate').value,
-        timeWindow: forcedTimeRangeString,   // Guarantees zero undefined breaks
-        duration: forcedDurationString,       // Guarantees zero undefined breaks
+        timeWindow: selectedTimeRange,
+        duration: computedDurationText,
         details: document.getElementById('taskDetails').value,
         itemsProcessed: rawProcessedInput ? parseInt(rawProcessedInput, 10) : "-"
       };
@@ -369,10 +299,7 @@
         
         document.getElementById('taskDetails').value = "";
         document.getElementById('itemsProcessed').value = "";
-        
-        document.getElementById('sliderStartHandle').value = "32";
-        document.getElementById('sliderEndHandle').value = "36";
-        syncTimeSlider(null);
+        document.getElementById('timeWindow').selectedIndex = 0;
       })
       .catch(err => {
         statusBox.className = "status-error";
