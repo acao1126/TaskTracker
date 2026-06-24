@@ -67,7 +67,57 @@
 
     textarea { resize: vertical; min-height: 90px; }
 
-    button {
+    /* --- DUAL DROPDOWN FLEX ROW --- */
+    .time-pickers-row {
+      display: flex;
+      gap: 14px;
+    }
+    .time-picker-box {
+      flex: 1;
+    }
+
+    /* --- DURATION QUICK CHIPS --- */
+    .duration-btn-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+      margin-bottom: 14px;
+    }
+    .duration-chip {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 10px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+    .duration-chip:hover {
+      border-color: var(--accent-color);
+      color: var(--accent-color);
+    }
+    .duration-chip.active {
+      background-color: var(--accent-color);
+      color: #ffffff;
+      border-color: var(--accent-color);
+    }
+
+    .window-preview-box {
+      background-color: rgba(0,112,243,0.06);
+      border: 1px dashed var(--accent-color);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--text-color);
+      text-align: center;
+    }
+
+    button.submit-btn {
       width: 100%;
       padding: 14px;
       background-color: var(--accent-color);
@@ -78,9 +128,10 @@
       font-weight: bold;
       cursor: pointer;
       transition: background-color 0.2s;
+      margin-top: 10px;
     }
-    button:hover { background-color: var(--accent-hover); }
-    button:disabled { background-color: var(--text-muted); cursor: not-allowed; }
+    button.submit-btn:hover { background-color: var(--accent-hover); }
+    button.submit-btn:disabled { background-color: var(--text-muted); cursor: not-allowed; }
 
     #statusMessage {
       margin-top: 20px;
@@ -114,10 +165,30 @@
       </div>
 
       <div class="form-group">
-        <label for="timeWindow">Time Window</label>
-        <select id="timeWindow" required>
-          <option value="" disabled selected>Select time range...</option>
-        </select>
+        <div class="time-pickers-row">
+          <div class="time-picker-box">
+            <label for="startTimeSelect">Start Time</label>
+            <select id="startTimeSelect" required onchange="onManualTimeChange()">
+              </select>
+          </div>
+          <div class="time-picker-box">
+            <label for="endTimeSelect">End Time</label>
+            <select id="endTimeSelect" required onchange="onManualTimeChange()">
+              </select>
+          </div>
+        </div>
+
+        <label style="margin-top: 14px; margin-bottom: 4px;">Quick Add Duration</label>
+        <div class="duration-btn-grid">
+          <div class="duration-chip" data-mins="15" onclick="applyDurationChip(15, this)">15m</div>
+          <div class="duration-chip" data-mins="30" onclick="applyDurationChip(30, this)">30m</div>
+          <div class="duration-chip" data-mins="60" onclick="applyDurationChip(60, this)">1h</div>
+          <div class="duration-chip" data-mins="120" onclick="applyDurationChip(120, this)">2h</div>
+        </div>
+
+        <div class="window-preview-box" id="windowPreview">
+          Total Duration: --
+        </div>
       </div>
 
       <div class="form-group">
@@ -130,7 +201,7 @@
         <input type="number" id="itemsProcessed" min="0" placeholder="e.g. 15">
       </div>
 
-      <button type="submit" id="submitBtn">Submit Task Log</button>
+      <button type="submit" class="submit-btn" id="submitBtn">Submit Task Log</button>
     </form>
 
     <div id="statusMessage"></div>
@@ -140,6 +211,9 @@
     const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     const MASTER_TOKEN = "589643"; 
 
+    let finalCalculatedTimeWindow = "";
+    let finalCalculatedDuration = "";
+
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       const yyyy = today.getFullYear();
@@ -147,74 +221,123 @@
       const dd = String(today.getDate()).padStart(2, '0');
       document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
       
-      generateOriginalTimeDropdownOptions();
-      
-      // CACHE STRATEGY: Try loading locally saved roster first for an instant draw
+      populateTimeDropdowns();
       initializeRosterWithCache();
     });
 
-    function generateOriginalTimeDropdownOptions() {
-      const timeSelect = document.getElementById('timeWindow');
+    function populateTimeDropdowns() {
+      const startSelect = document.getElementById('startTimeSelect');
+      const endSelect = document.getElementById('endTimeSelect');
+      
       for(let h=0; h<24; h++) {
         for(let m=0; m<60; m+=15) {
-          let startH = h % 12 === 0 ? 12 : h % 12;
-          let startM = m === 0 ? "00" : m;
-          let startAMPM = h >= 12 ? "PM" : "AM";
+          let hrs = h % 12 === 0 ? 12 : h % 12;
+          let mins = m === 0 ? "00" : m;
+          let ampm = h >= 12 ? "PM" : "AM";
+          let padH = hrs < 10 ? "0" + hrs : hrs;
+          let stringVal = `${padH}:${mins} ${ampm}`;
           
-          let endTotalMins = (h * 60) + m + 15;
-          let endHRaw = Math.floor(endTotalMins / 60) % 24;
-          let endMRaw = endTotalMins % 60;
+          // Options for Start Time Dropdown
+          let optStart = document.createElement('option');
+          optStart.value = stringVal; optStart.textContent = stringVal;
+          startSelect.appendChild(optStart);
+          if(h === 8 && m === 0) optStart.selected = true; // Default 8:00 AM
           
-          let endH = endHRaw % 12 === 0 ? 12 : endHRaw % 12;
-          let endM = endMRaw === 0 ? "00" : endMRaw;
-          let endAMPM = endHRaw >= 12 ? "PM" : "AM";
-          
-          let padStartH = startH < 10 ? "0" + startH : startH;
-          let padEndH = endH < 10 ? "0" + endH : endH;
-          
-          let optionStr = `${padStartH}:${startM} ${startAMPM} - ${padEndH}:${endM} ${endAMPM}`;
-          let opt = document.createElement('option');
-          opt.value = optionStr;
-          opt.textContent = optionStr;
-          timeSelect.appendChild(opt);
+          // Options for End Time Dropdown
+          let optEnd = document.createElement('option');
+          optEnd.value = stringVal; optEnd.textContent = stringVal;
+          endSelect.appendChild(optEnd);
+          if(h === 8 && m === 30) optEnd.selected = true; // Default 8:30 AM
         }
       }
+      
+      // Seed midnight end option boundary to allow long day closures cleanly
+      let optMidnight = document.createElement('option');
+      optMidnight.value = "12:00 AM"; optMidnight.textContent = "12:00 AM";
+      endSelect.appendChild(optMidnight);
+
+      calculateTimeStrings();
     }
 
-    // --- INSTANT CACHE RENDERER ---
+    function parseTimeToMinutes(timeStr) {
+      if(!timeStr) return 0;
+      let parts = timeStr.split(' ')[0].split(':');
+      let ampm = timeStr.split(' ')[1];
+      let h = parseInt(timeParts = parts[0], 10);
+      let m = parseInt(parts[1], 10);
+      if(h === 12) h = ampm === 'AM' ? 0 : 12;
+      else if(ampm === 'PM') h += 12;
+      return (h * 60) + m;
+    }
+
+    function stringifyMinutes(totalMins) {
+      let hrRaw = Math.floor(totalMins / 60) % 24;
+      let mnRaw = totalMins % 60;
+      let outH = hrRaw % 12 === 0 ? 12 : hrRaw % 12;
+      let outM = mnRaw === 0 ? "00" : mnRaw;
+      let outAMPM = hrRaw >= 12 ? "PM" : "AM";
+      return `${outH < 10 ? '0'+outH : outH}:${outM} ${outAMPM}`;
+    }
+
+    function applyDurationChip(mins, element) {
+      document.querySelectorAll('.duration-chip').forEach(chip => chip.classList.remove('active'));
+      element.classList.add('active');
+      
+      const startStr = document.getElementById('startTimeSelect').value;
+      let startMins = parseTimeToMinutes(startStr);
+      let endMins = startMins + mins;
+      
+      document.getElementById('endTimeSelect').value = stringifyMinutes(endMins);
+      calculateTimeStrings();
+    }
+
+    function onManualTimeChange() {
+      // Clear out active buttons if user changes dropdowns manually
+      document.querySelectorAll('.duration-chip').forEach(chip => chip.classList.remove('active'));
+      calculateTimeStrings();
+    }
+
+    function calculateTimeStrings() {
+      const startStr = document.getElementById('startTimeSelect').value;
+      const endStr = document.getElementById('endTimeSelect').value;
+      
+      let startMins = parseTimeToMinutes(startStr);
+      let endMins = parseTimeToMinutes(endStr);
+      
+      let diff = endMins - startMins;
+      if (diff <= 0) diff += 1440; // Safely process day rollovers
+
+      let hrsText = Math.floor(diff / 60);
+      let minsText = diff % 60;
+      let outParts = [];
+      if (hrsText > 0) outParts.push(`${hrsText} hr${hrsText > 1 ? 's' : ''}`);
+      if (minsText > 0) outParts.push(`${minsText} min${minsText > 1 ? 's' : ''}`);
+      
+      finalCalculatedTimeWindow = `${startStr} - ${endStr}`;
+      finalCalculatedDuration = outParts.join(' ') || "0 mins";
+
+      document.getElementById('windowPreview').innerHTML = `⏳ Duration: <strong>${finalCalculatedDuration}</strong>`;
+    }
+
     function initializeRosterWithCache() {
       const cachedNames = localStorage.getItem('tracker_roster_names_cache');
-      
       if (cachedNames) {
-        try {
-          const parsedNames = JSON.parse(cachedNames);
-          renderRosterDropdown(parsedNames);
-        } catch(e) { console.error("Roster cache read failed:", e); }
+        try { renderRosterDropdown(JSON.parse(cachedNames)); } catch(e) {}
       }
-      
-      // Quietly fetch from sheet in background to ensure sync is fresh
       fetchLiveRosterFromLeads();
     }
 
     function renderRosterDropdown(namesArray) {
       const memberSelect = document.getElementById('teamMember');
       const currentSelection = memberSelect.value;
-      
       memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
-      
       if (Array.isArray(namesArray) && namesArray.length > 0) {
         namesArray.forEach(name => {
           if (name) {
-            let opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            memberSelect.appendChild(opt);
+            let opt = document.createElement('option'); opt.value = name; opt.textContent = name; memberSelect.appendChild(opt);
           }
         });
-        // Restore user selection if they were mid-fill during background sync refresh
         if (currentSelection) memberSelect.value = currentSelection;
-      } else {
-        memberSelect.innerHTML = '<option value="" disabled selected>Select your name...</option>';
       }
     }
 
@@ -227,41 +350,10 @@
     window.handleRosterLoad = function(data) {
       if (data && Array.isArray(data.names)) {
         const cleanNames = data.names.filter(Boolean);
-        
-        // Save to browser device memory for next launch loop
         localStorage.setItem('tracker_roster_names_cache', JSON.stringify(cleanNames));
-        
-        // Refresh dropdown smoothly
         renderRosterDropdown(cleanNames);
-      } else {
-        const memberSelect = document.getElementById('teamMember');
-        if (!memberSelect.value) {
-          memberSelect.innerHTML = '<option value="" disabled selected>⚠️ Failed to load roster names</option>';
-        }
       }
     };
-
-    function calculateStringDuration(timeWindowStr) {
-      if(!timeWindowStr || !timeWindowStr.includes(' - ')) return "15 mins";
-      try {
-        let parts = timeWindowStr.split(' - ');
-        function toMins(tStr) {
-          let clean = tStr.trim().split(' ');
-          let [h, m] = clean[0].split(':').map(Number);
-          if(h === 12) h = clean[1] === 'AM' ? 0 : 12;
-          else if(clean[1] === 'PM') h += 12;
-          return (h * 60) + m;
-        }
-        let diff = toMins(parts[1]) - toMins(parts[0]);
-        if(diff < 0) diff += 1440; 
-        let hrs = Math.floor(diff / 60);
-        let mins = diff % 60;
-        let out = [];
-        if(hrs > 0) out.push(`${hrs} hr${hrs > 1 ? 's' : ''}`);
-        if(mins > 0) out.push(`${mins} min${mins > 1 ? 's' : ''}`);
-        return out.join(' ') || "0 mins";
-      } catch(e) { return "15 mins"; }
-    }
 
     function submitTaskLog(e) {
       e.preventDefault();
@@ -272,16 +364,14 @@
       submitBtn.textContent = "Saving Log to Sheets...";
       statusBox.style.display = "none";
 
-      const selectedTimeRange = document.getElementById('timeWindow').value;
-      const computedDurationText = calculateStringDuration(selectedTimeRange);
       const rawProcessedInput = document.getElementById('itemsProcessed').value;
 
       const payloadData = {
         token: MASTER_TOKEN,
         name: document.getElementById('teamMember').value,
         date: document.getElementById('taskDate').value,
-        timeWindow: selectedTimeRange,
-        duration: computedDurationText,
+        timeWindow: finalCalculatedTimeWindow,
+        duration: finalCalculatedDuration,
         details: document.getElementById('taskDetails').value,
         itemsProcessed: rawProcessedInput ? parseInt(rawProcessedInput, 10) : "-"
       };
@@ -299,7 +389,12 @@
         
         document.getElementById('taskDetails').value = "";
         document.getElementById('itemsProcessed').value = "";
-        document.getElementById('timeWindow').selectedIndex = 0;
+        
+        // Return to standard baseline defaults (8:00 AM - 8:30 AM)
+        document.getElementById('startTimeSelect').value = "08:00 AM";
+        document.getElementById('endTimeSelect').value = "08:30 AM";
+        document.querySelectorAll('.duration-chip').forEach(chip => chip.classList.remove('active'));
+        calculateTimeStrings();
       })
       .catch(err => {
         statusBox.className = "status-error";
