@@ -31,12 +31,9 @@
     .metric-card h3 { margin: 0 0 10px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: var(--accent-color); }
     
-    /* Updated Filter Box layout to neatly fit the text search field */
     .filter-box { background: var(--card-bg); padding: 15px 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid var(--border-color); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
     .filter-group { display: flex; align-items: center; gap: 10px; }
     .filter-box select { padding: 8px 12px; font-size: 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); }
-    
-    /* Search Input field styling */
     .search-input { padding: 8px 12px; font-size: 14px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); min-width: 240px; flex-grow: 1; }
     .search-input:focus { outline: none; border-color: var(--accent-color); }
 
@@ -91,7 +88,6 @@
     <div class="filter-box">
       <div class="filter-group"><label for="filterName">Filter by Member:</label><select id="filterName" onchange="applyFilters()"><option value="ALL">All Team Members</option></select></div>
       <div class="filter-group"><label for="filterDate">Filter by Date:</label><select id="filterDate" onchange="applyFilters()"><option value="ALL">All Dates</option></select></div>
-      
       <div class="filter-group" style="flex-grow: 1;">
         <input type="text" id="dashboardSearch" class="search-input" placeholder="🔍 Search tasks details, descriptions, logs..." oninput="applyFilters()">
       </div>
@@ -127,7 +123,6 @@
     function handlePinInput(inputEl) {
       document.getElementById('pinError').textContent = ""; 
       const typedPin = inputEl.value;
-
       if (typedPin.length === 6) {
         if (_vP(typedPin)) {
           activeToken = typedPin;
@@ -152,12 +147,16 @@
       }
     });
 
+    // AGGRESSIVE DATE NORMALIZATION: Forces strings, slashes, and objects into exact yyyy-mm-dd keys
     function cleanAndParseDate(dateStr) {
       if (!dateStr || dateStr === "undefined") return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-      let pureDatePart = dateStr.toString().split('T')[0].split(' ')[0];
-      if (pureDatePart.includes('/')) {
-        let parts = pureDatePart.split('/');
+      let target = dateStr.toString().trim().split('T')[0].split(' ')[0];
+      
+      if (/^\d{4}-\d{2}-\d{2}$/.test(target)) return target;
+      
+      // Handle slash structures (e.g. 2026/06/24 or 06/24/2026)
+      if (target.includes('/')) {
+        let parts = target.split('/');
         if (parts[0].length === 4) {
           return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
         }
@@ -165,6 +164,7 @@
           return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
         }
       }
+      
       let dObj = new Date(dateStr);
       if (!isNaN(dObj.getTime())) {
         let y = dObj.getFullYear();
@@ -269,8 +269,6 @@
       if(data.secured && data.names.length === 0) {
         document.getElementById('syncText').textContent = "⛔ Access Revoked by Google Cloud Security Rule.";
         document.getElementById('syncDot').style.backgroundColor = "#ef4444";
-        localStorage.clear();
-        setTimeout(() => { location.reload(); }, 2000);
         return;
       }
 
@@ -287,26 +285,17 @@
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
       scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + activeToken + "&_cb=" + new Date().getTime();
-      scriptElement.onerror = function() {
-        document.getElementById('syncText').textContent = "Offline Mode active. Cloud synchronization failed.";
-      };
       document.body.appendChild(scriptElement);
     }
 
     function toggleDateGroup(headerEl) {
       headerEl.classList.toggle('collapsed');
-      const targetContent = headerEl.nextElementSibling;
-      targetContent.classList.toggle('is-hidden');
-      if(headerEl.classList.contains('collapsed')) {
-        const toggleBtn = headerEl.querySelector('.expand-all-action-link');
-        toggleBtn.textContent = "Expand All";
-      }
+      headerEl.nextElementSibling.classList.toggle('is-hidden');
     }
 
     function toggleHourBlock(headerEl) {
       headerEl.classList.toggle('collapsed');
-      const targetContent = headerEl.nextElementSibling;
-      targetContent.classList.toggle('is-hidden');
+      headerEl.nextElementSibling.classList.toggle('is-hidden');
     }
 
     function toggleAllHoursInDate(event, linkEl) {
@@ -331,6 +320,11 @@
       }
     }
 
+    function escapeTextHTML(str) {
+      if (!str) return '';
+      return str.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
     function buildGroupedDashboard(selectedName, selectedDate, searchQuery) {
       const feedContainer = document.getElementById('dashboardFeed');
       feedContainer.innerHTML = "";
@@ -341,13 +335,14 @@
       const lowerQuery = searchQuery.trim().toLowerCase();
 
       rawDataHistory.forEach(item => {
+        if (!item) return;
         let normalizedDate = cleanAndParseDate(item.date);
-        if (!item || !item.name || !normalizedDate || !item.timeWindow) return;
+        if (!item.name || !normalizedDate || !item.timeWindow) return;
         
-        const matchesName = (selectedName === "ALL" || item.name === selectedName);
+        // BALANCED FILTER GATES: Standardizes matching constraints across ALL text formats
+        const matchesName = (selectedName === "ALL" || item.name.toString().trim() === selectedName.trim());
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
         
-        // Text Match Rule: Checks details, descriptions, or name columns
         var logDetailsText = (item.details || item.taskDetails || "").toString().toLowerCase();
         const matchesSearch = (lowerQuery === "" || logDetailsText.includes(lowerQuery) || item.name.toLowerCase().includes(lowerQuery));
 
@@ -371,70 +366,53 @@
 
       const sortedDates = Object.keys(groupedData).sort((a, b) => b.localeCompare(a));
       if (sortedDates.length === 0) {
-        feedContainer.innerHTML = "<div class='status-loading'>No task logs match your chosen query filters.</div>"; return;
+        feedContainer.innerHTML = "<div class='status-loading'>No task logs found matching query filters.</div>"; return;
       }
 
-      sortedDates.forEach((date, dateIdx) => {
+      sortedDates.forEach(date => {
         const dateGroup = groupedData[date];
         const dateObj = new Date(date + "T00:00:00");
         const formattedDate = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
         
-        const dateGroupDiv = document.createElement('div'); 
-        dateGroupDiv.className = 'date-group';
-        
-        const headerDiv = document.createElement('div'); 
-        headerDiv.className = 'date-header collapsed';
+        const dateGroupDiv = document.createElement('div'); dateGroupDiv.className = 'date-group';
+        const headerDiv = document.createElement('div'); headerDiv.className = 'date-header collapsed';
         headerDiv.setAttribute('onclick', 'toggleDateGroup(this)');
         headerDiv.innerHTML = `
           <div class="date-header-left">
-            <span>📅 ${formattedDate}</span>
+            <span>📅 ${escapeTextHTML(formattedDate)}</span>
             <button class="expand-all-action-link" onclick="toggleAllHoursInDate(event, this)">Expand All</button>
           </div>
-          <span class="date-duration-total">
-            Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong>
-            <span class="toggle-arrow">▼</span>
-          </span>
+          <span class="date-duration-total">Total Time: <strong>${formatMinutesToText(dateGroup.totalMinutes)}</strong><span class="toggle-arrow">▼</span></span>
         `;
         dateGroupDiv.appendChild(headerDiv);
 
-        const dateContentDiv = document.createElement('div');
-        dateContentDiv.className = 'date-content is-hidden';
-        
+        const dateContentDiv = document.createElement('div'); dateContentDiv.className = 'date-content is-hidden';
         const sortedHours = Object.keys(dateGroup.hours).sort((a, b) => getStartTimeInMinutes(dateGroup.hours[a][0].timeWindow) - getStartTimeInMinutes(dateGroup.hours[b][0].timeWindow));
         
-        sortedHours.forEach((hourLabel, hourIdx) => {
+        sortedHours.forEach(hourLabel => {
           const tasksInHour = dateGroup.hours[hourLabel];
           tasksInHour.sort((a, b) => getStartTimeInMinutes(a.timeWindow) - getStartTimeInMinutes(b.timeWindow));
           
-          const hourBlockDiv = document.createElement('div'); 
-          hourBlockDiv.className = 'hour-block';
-          
-          const hourHeaderSpan = document.createElement('div'); 
-          hourHeaderSpan.className = 'hour-header collapsed'; 
+          const hourBlockDiv = document.createElement('div'); hourBlockDiv.className = 'hour-block';
+          const hourHeaderSpan = document.createElement('div'); hourHeaderSpan.className = 'hour-header collapsed'; 
           hourHeaderSpan.setAttribute('onclick', 'toggleHourBlock(this)');
-          hourHeaderSpan.innerHTML = `⏰ ${hourLabel} <span class="toggle-arrow">▼</span>`;
+          hourHeaderSpan.innerHTML = `⏰ ${escapeTextHTML(hourLabel)} <span class="toggle-arrow">▼</span>`;
           hourBlockDiv.appendChild(hourHeaderSpan);
           
-          const hourContentDiv = document.createElement('div');
-          hourContentDiv.className = 'hour-content is-hidden';
-          
-          const logGrid = document.createElement('div'); 
-          logGrid.className = 'log-grid';
+          const hourContentDiv = document.createElement('div'); hourContentDiv.className = 'hour-content is-hidden';
+          const logGrid = document.createElement('div'); logGrid.className = 'log-grid';
 
           tasksInHour.forEach(item => {
             let card = document.createElement('div'); card.className = 'log-card';
-            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${item.itemsProcessed}</strong>` : '';
-            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${item.name}</span><span class="task-time-tag">⏱️ ${item.timeWindow}</span></div><div class="task-desc">${item.details || item.taskDetails || '-'}</div></div><div class="log-footer"><span>⏳ ${item.duration}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
+            let itemsText = (item.itemsProcessed && item.itemsProcessed !== "-") ? `📦 Items: <strong>${escapeTextHTML(item.itemsProcessed)}</strong>` : '';
+            let rawDetails = item.details || item.taskDetails || '-';
+            
+            card.innerHTML = `<div><div class="log-header"><span class="team-name">👤 ${escapeTextHTML(item.name)}</span><span class="task-time-tag">⏱️ ${escapeTextHTML(item.timeWindow)}</span></div><div class="task-desc">${escapeTextHTML(rawDetails)}</div></div><div class="log-footer"><span>⏳ ${escapeTextHTML(item.duration)}</span>${itemsText ? `<span>${itemsText}</span>` : ''}</div>`;
             logGrid.appendChild(card);
           });
-          
-          hourContentDiv.appendChild(logGrid);
-          hourBlockDiv.appendChild(hourContentDiv);
-          dateContentDiv.appendChild(hourBlockDiv);
+          hourContentDiv.appendChild(logGrid); hourBlockDiv.appendChild(hourContentDiv); dateContentDiv.appendChild(hourBlockDiv);
         });
-        
-        dateGroupDiv.appendChild(dateContentDiv);
-        feedContainer.appendChild(dateGroupDiv);
+        dateGroupDiv.appendChild(dateContentDiv); feedContainer.appendChild(dateGroupDiv);
       });
     }
 
@@ -442,7 +420,6 @@
       activeNameFilter = document.getElementById('filterName').value;
       activeDateFilter = document.getElementById('filterDate').value;
       activeSearchQuery = document.getElementById('dashboardSearch').value;
-      
       buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
     }
   </script>
