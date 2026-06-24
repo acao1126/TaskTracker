@@ -67,7 +67,6 @@
 
     textarea { resize: vertical; min-height: 90px; }
 
-    /* --- DUAL DROPDOWN FLEX ROW --- */
     .time-pickers-row {
       display: flex;
       gap: 14px;
@@ -76,7 +75,6 @@
       flex: 1;
     }
 
-    /* --- DURATION QUICK CHIPS --- */
     .duration-btn-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -181,7 +179,7 @@
         <label style="margin-top: 14px; margin-bottom: 4px;">Quick Add Duration</label>
         <div class="duration-btn-grid">
           <div class="duration-chip" data-mins="15" onclick="applyDurationChip(15, this)">15m</div>
-          <div class="duration-chip" data-mins="30" onclick="applyDurationChip(30, this)">30m</div>
+          <div class="duration-chip active" data-mins="30" onclick="applyDurationChip(30, this)">30m</div>
           <div class="duration-chip" data-mins="60" onclick="applyDurationChip(60, this)">1h</div>
           <div class="duration-chip" data-mins="120" onclick="applyDurationChip(120, this)">2h</div>
         </div>
@@ -208,6 +206,7 @@
   </div>
 
   <script>
+    // Make sure this matches your latest Apps Script Deployment URL
     const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     const MASTER_TOKEN = "589643"; 
 
@@ -225,33 +224,45 @@
       initializeRosterWithCache();
     });
 
+    function formatTimeValue(h, m) {
+      let hrs = h % 12 === 0 ? 12 : h % 12;
+      let mins = m === 0 ? "00" : m;
+      let ampm = h >= 12 ? "PM" : "AM";
+      let padH = hrs < 10 ? "0" + hrs : hrs;
+      return `${padH}:${mins} ${ampm}`;
+    }
+
     function populateTimeDropdowns() {
       const startSelect = document.getElementById('startTimeSelect');
       const endSelect = document.getElementById('endTimeSelect');
       
+      // Calculate dynamic current hour offsets on launch
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Calculate default selections: current hour for start, current hour + 30m for end
+      let defaultStartStr = formatTimeValue(currentHour, 0);
+      
+      let endHourRaw = currentHour;
+      let endMinRaw = 30;
+      let defaultEndStr = formatTimeValue(endHourRaw, endMinRaw);
+
       for(let h=0; h<24; h++) {
         for(let m=0; m<60; m+=15) {
-          let hrs = h % 12 === 0 ? 12 : h % 12;
-          let mins = m === 0 ? "00" : m;
-          let ampm = h >= 12 ? "PM" : "AM";
-          let padH = hrs < 10 ? "0" + hrs : hrs;
-          let stringVal = `${padH}:${mins} ${ampm}`;
+          let stringVal = formatTimeValue(h, m);
           
-          // Options for Start Time Dropdown
           let optStart = document.createElement('option');
           optStart.value = stringVal; optStart.textContent = stringVal;
           startSelect.appendChild(optStart);
-          if(h === 8 && m === 0) optStart.selected = true; // Default 8:00 AM
+          if(stringVal === defaultStartStr) optStart.selected = true;
           
-          // Options for End Time Dropdown
           let optEnd = document.createElement('option');
           optEnd.value = stringVal; optEnd.textContent = stringVal;
           endSelect.appendChild(optEnd);
-          if(h === 8 && m === 30) optEnd.selected = true; // Default 8:30 AM
+          if(stringVal === defaultEndStr) optEnd.selected = true;
         }
       }
       
-      // Seed midnight end option boundary to allow long day closures cleanly
       let optMidnight = document.createElement('option');
       optMidnight.value = "12:00 AM"; optMidnight.textContent = "12:00 AM";
       endSelect.appendChild(optMidnight);
@@ -263,7 +274,7 @@
       if(!timeStr) return 0;
       let parts = timeStr.split(' ')[0].split(':');
       let ampm = timeStr.split(' ')[1];
-      let h = parseInt(timeParts = parts[0], 10);
+      let h = parseInt(parts[0], 10);
       let m = parseInt(parts[1], 10);
       if(h === 12) h = ampm === 'AM' ? 0 : 12;
       else if(ampm === 'PM') h += 12;
@@ -292,7 +303,6 @@
     }
 
     function onManualTimeChange() {
-      // Clear out active buttons if user changes dropdowns manually
       document.querySelectorAll('.duration-chip').forEach(chip => chip.classList.remove('active'));
       calculateTimeStrings();
     }
@@ -305,7 +315,7 @@
       let endMins = parseTimeToMinutes(endStr);
       
       let diff = endMins - startMins;
-      if (diff <= 0) diff += 1440; // Safely process day rollovers
+      if (diff <= 0) diff += 1440; 
 
       let hrsText = Math.floor(diff / 60);
       let minsText = diff % 60;
@@ -390,10 +400,13 @@
         document.getElementById('taskDetails').value = "";
         document.getElementById('itemsProcessed').value = "";
         
-        // Return to standard baseline defaults (8:00 AM - 8:30 AM)
-        document.getElementById('startTimeSelect').value = "08:00 AM";
-        document.getElementById('endTimeSelect').value = "08:30 AM";
+        // Dynamic Reset: Round back down to the current hour on success refresh
+        const now = new Date();
+        const curH = now.getHours();
+        document.getElementById('startTimeSelect').value = formatTimeValue(curH, 0);
+        document.getElementById('endTimeSelect').value = formatTimeValue(curH, 30);
         document.querySelectorAll('.duration-chip').forEach(chip => chip.classList.remove('active'));
+        document.querySelector('[data-mins="30"]').classList.add('active');
         calculateTimeStrings();
       })
       .catch(err => {
