@@ -93,11 +93,13 @@
       </div>
     </div>
 
-    <div class="sync-status"><span id="syncDot" class="dot"></span><span id="syncText">Loading locally cached metrics...</span></div>
+    <div class="sync-status"><span id="syncDot" class="dot"></span><span id="syncText">Loading metrics...</span></div>
     <div id="dashboardFeed"></div>
   </div>
 
   <script>
+    // --- CRITICAL CONNECTION CHECK ---
+    // Make sure this matches your LATEST Google Web App Deployment URL precisely!
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec"; 
 
     const _0x0a1 = [53,56,57,54,52,51]; 
@@ -147,30 +149,18 @@
       }
     });
 
-    // AGGRESSIVE DATE NORMALIZATION: Forces strings, slashes, and objects into exact yyyy-mm-dd keys
     function cleanAndParseDate(dateStr) {
       if (!dateStr || dateStr === "undefined") return null;
       let target = dateStr.toString().trim().split('T')[0].split(' ')[0];
-      
       if (/^\d{4}-\d{2}-\d{2}$/.test(target)) return target;
-      
-      // Handle slash structures (e.g. 2026/06/24 or 06/24/2026)
       if (target.includes('/')) {
         let parts = target.split('/');
-        if (parts[0].length === 4) {
-          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-        }
-        if (parts[2] && parts[2].length === 4) {
-          return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-        }
+        if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        if (parts[2] && parts[2].length === 4) return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
       }
-      
       let dObj = new Date(dateStr);
       if (!isNaN(dObj.getTime())) {
-        let y = dObj.getFullYear();
-        let m = String(dObj.getMonth() + 1).padStart(2, '0');
-        let d = String(dObj.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+        return `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
       }
       return null;
     }
@@ -182,7 +172,7 @@
       if (parts.length < 2) return 0;
       const time = parts[0]; const modifier = parts[1];
       let [hours, minutes] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return 0;
+      if (isNaN(hours) || iSbN(minutes)) return 0;
       if (hours === 12) hours = (modifier === 'AM') ? 0 : 12;
       else if (modifier === 'PM') hours += 12;
       return (hours * 60) + minutes;
@@ -227,12 +217,14 @@
       const cachedData = localStorage.getItem('tracker_dashboard_cache');
       const cachedNames = localStorage.getItem('tracker_names_cache');
       if (cachedData && cachedNames) {
-        rawDataHistory = JSON.parse(cachedData);
-        populateDropdowns(JSON.parse(cachedNames), rawDataHistory);
-        buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
-        document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
+        try {
+          rawDataHistory = JSON.parse(cachedData) || [];
+          populateDropdowns(JSON.parse(cachedNames) || [], rawDataHistory);
+          buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
+          document.getElementById('syncText').textContent = "Displaying cached logs. Checking cloud for updates...";
+        } catch(e) { }
       } else {
-        document.getElementById('syncText').textContent = "No cache found. Downloading master sheet databases...";
+        document.getElementById('syncText').textContent = "Downloading databases from Google Sheet...";
       }
       fetchFreshCloudData();
     }
@@ -265,25 +257,28 @@
       if(currentDateSelection) dateSelect.value = currentDateSelection;
     }
 
+    // --- BROAD INTERCEPTOR HANDSHAKE ---
+    // This receives the master JSONP object stream array back from Google
     window.handleGoogleResponse = function(data) {
-      if(data.secured && data.names.length === 0) {
-        document.getElementById('syncText').textContent = "⛔ Access Revoked by Google Cloud Security Rule.";
-        document.getElementById('syncDot').style.backgroundColor = "#ef4444";
-        return;
-      }
-
-      rawDataHistory = data.history || [];
+      if(!data) return;
+      
+      // Fallback routing if database arrives via raw object parameter arrays
+      rawDataHistory = data.history || data.records || [];
       const incomingNames = data.names || [];
+      
       localStorage.setItem('tracker_dashboard_cache', JSON.stringify(rawDataHistory));
       localStorage.setItem('tracker_names_cache', JSON.stringify(incomingNames));
+      
       populateDropdowns(incomingNames, rawDataHistory);
       buildGroupedDashboard(activeNameFilter, activeDateFilter, activeSearchQuery);
+      
       document.getElementById('syncDot').className = "dot synced";
       document.getElementById('syncText').textContent = "Synced with live Google Sheet database (Real-Time).";
     };
 
     function fetchFreshCloudData() {
       const scriptElement = document.createElement('script');
+      // Append callback execution queries dynamically
       scriptElement.src = SCRIPT_URL + "?callback=handleGoogleResponse&token=" + activeToken + "&_cb=" + new Date().getTime();
       document.body.appendChild(scriptElement);
     }
@@ -339,7 +334,6 @@
         let normalizedDate = cleanAndParseDate(item.date);
         if (!item.name || !normalizedDate || !item.timeWindow) return;
         
-        // BALANCED FILTER GATES: Standardizes matching constraints across ALL text formats
         const matchesName = (selectedName === "ALL" || item.name.toString().trim() === selectedName.trim());
         const matchesDate = (selectedDate === "ALL" || normalizedDate === selectedDate);
         
@@ -354,7 +348,7 @@
           if (!groupedData[normalizedDate]) groupedData[normalizedDate] = { hours: {}, totalMinutes: 0 };
           const hourLabel = getHourBlockLabel(item.timeWindow);
           if (!groupedData[normalizedDate].hours[hourLabel]) groupedData[normalizedDate].hours[hourLabel] = [];
-          groupedData[normalizedDate].hours[hourLabel].push(item);
+          groupedData[groupedDate[normalizedDate].hours[hourLabel].push(item);
           
           groupedData[normalizedDate].totalMinutes += parseDurationToMinutes(item.duration);
         }
