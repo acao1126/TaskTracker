@@ -199,8 +199,8 @@
           <div class="slider-base-bar"></div>
           <div class="slider-active-range" id="sliderHighlightRange"></div>
           
-          <input type="range" id="sliderStartHandle" class="slider-input-handle" min="24" max="88" step="1" value="32" oninput="syncTimeSlider()">
-          <input type="range" id="sliderEndHandle" class="slider-input-handle" min="24" max="88" step="1" value="36" oninput="syncTimeSlider()">
+          <input type="range" id="sliderStartHandle" class="slider-input-handle" min="24" max="88" step="1" value="32" oninput="syncTimeSlider(event)">
+          <input type="range" id="sliderEndHandle" class="slider-input-handle" min="24" max="88" step="1" value="36" oninput="syncTimeSlider(event)">
         </div>
         
         <div class="slider-axis-labels">
@@ -237,7 +237,9 @@
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
       document.getElementById('taskDate').value = `${yyyy}-${mm}-${dd}`;
-      syncTimeSlider();
+      
+      // Force initialize default slider calculation bounds immediately on boot
+      syncTimeSlider(null);
       
       fetchLiveRosterFromLeads();
     });
@@ -278,7 +280,7 @@
       return `${displayHoursStr}:${displayMinutes} ${ampm}`;
     }
 
-    function syncTimeSlider() {
+    function syncTimeSlider(e) {
       const startEl = document.getElementById('sliderStartHandle');
       const endEl = document.getElementById('sliderEndHandle');
       const highlightRange = document.getElementById('sliderHighlightRange');
@@ -286,8 +288,9 @@
       let startVal = parseInt(startEl.value, 10);
       let endVal = parseInt(endEl.value, 10);
       
+      // Enforce overlap crossing boundaries restriction rules safely
       if (startVal >= endVal) {
-        if (event && event.target.id === 'sliderStartHandle') {
+        if (e && e.target && e.target.id === 'sliderStartHandle') {
           endVal = startVal + 1;
           endEl.value = endVal;
         } else {
@@ -329,8 +332,9 @@
       submitBtn.textContent = "Saving Log to Sheets...";
       statusBox.style.display = "none";
 
-      const calculatedTimeRange = document.getElementById('timePreviewDisplay').textContent;
-      const calculatedDuration = document.getElementById('durationPreviewDisplay').textContent;
+      // Direct fallback parsing to make sure values are never lost or undefined
+      const calculatedTimeRange = document.getElementById('timePreviewDisplay').innerText || document.getElementById('timePreviewDisplay').textContent;
+      const calculatedDuration = document.getElementById('durationPreviewDisplay').innerText || document.getElementById('durationPreviewDisplay').textContent;
       const rawProcessedInput = document.getElementById('itemsProcessed').value;
 
       const payloadData = {
@@ -359,7 +363,7 @@
         
         document.getElementById('sliderStartHandle').value = "32";
         document.getElementById('sliderEndHandle').value = "36";
-        syncTimeSlider();
+        syncTimeSlider(null);
       })
       .catch(err => {
         statusBox.className = "status-error";
