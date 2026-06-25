@@ -206,7 +206,6 @@
   </div>
 
   <script>
-    // Make sure this matches your latest Apps Script Deployment URL
     const DEPLOY_URL = "https://script.google.com/macros/s/AKfycbzmwrKyAHgkbh4mRpjIv0x_VRJTzIWMCy_q9oUopQoLXJHlFRyOe7PTv7cEM5m5dnNRTw/exec";
     const MASTER_TOKEN = "589643"; 
 
@@ -236,11 +235,9 @@
       const startSelect = document.getElementById('startTimeSelect');
       const endSelect = document.getElementById('endTimeSelect');
       
-      // Calculate dynamic current hour offsets on launch
       const now = new Date();
       const currentHour = now.getHours();
       
-      // Calculate default selections: current hour for start, current hour + 30m for end
       let defaultStartStr = formatTimeValue(currentHour, 0);
       
       let endHourRaw = currentHour;
@@ -315,7 +312,14 @@
       let endMins = parseTimeToMinutes(endStr);
       
       let diff = endMins - startMins;
-      if (diff <= 0) diff += 1440; 
+      
+      // --- FIXED ZONE: ZERO-MINUTE EXPLICIT EVALUATION ---
+      if (diff < 0) {
+        diff += 1440; // Safely process day rollovers
+      } else if (diff === 0) {
+        diff = 0;     // Explicitly retain zero duration bounds
+      }
+      // ---------------------------------------------------
 
       let hrsText = Math.floor(diff / 60);
       let minsText = diff % 60;
@@ -400,7 +404,6 @@
         document.getElementById('taskDetails').value = "";
         document.getElementById('itemsProcessed').value = "";
         
-        // Dynamic Reset: Round back down to the current hour on success refresh
         const now = new Date();
         const curH = now.getHours();
         document.getElementById('startTimeSelect').value = formatTimeValue(curH, 0);
